@@ -4,7 +4,11 @@
  */
  'use strict';
 
+ // Note: Deep imports are required for codegen components
+ // Suppressing deprecation warnings as these are the correct imports for codegen
+ // @ts-ignore - React Native codegen requires these deep imports
  import codegenNativeComponent from 'react-native/Libraries/Utilities/codegenNativeComponent';
+ // @ts-ignore - React Native codegen requires these deep imports
  import codegenNativeCommands from 'react-native/Libraries/Utilities/codegenNativeCommands';
  
  type ChangeEvent = $ReadOnly<{|

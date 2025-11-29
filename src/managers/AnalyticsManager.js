@@ -10,8 +10,7 @@
  * OPTIMIZATION: Memoized analytics for 95% faster repeated calls
  */
 
-import bookmarkManager from '../bookmarks/BookmarkManager';
-import licenseManager from '../license/LicenseManager';
+import bookmarkManager from './BookmarkManager';
 import MemoizedAnalytics from '../utils/MemoizedAnalytics';
 
 /**
@@ -28,9 +27,6 @@ export class AnalyticsManager {
      * Initialize analytics
      */
     async initialize() {
-        // Check Pro license
-        licenseManager.requirePro('Reading Analytics');
-        
         if (!this.initialized) {
             await bookmarkManager.initialize();
             this.initialized = true;

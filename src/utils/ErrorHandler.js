@@ -157,16 +157,6 @@ export const validatePageNumber = (page, totalPages) => {
   }
 };
 
-export const validateLicense = (licenseManager, featureName) => {
-  if (!licenseManager.isProActive()) {
-    throw new PDFError(
-      `${featureName} requires a Pro license`,
-      ErrorCodes.LICENSE_REQUIRED,
-      {feature: featureName}
-    );
-  }
-};
-
 export default {
   PDFError,
   ErrorCodes,
@@ -175,5 +165,4 @@ export default {
   withErrorHandling,
   validatePDFPath,
   validatePageNumber,
-  validateLicense,
 };

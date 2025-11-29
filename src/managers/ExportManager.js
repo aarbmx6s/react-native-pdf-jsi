@@ -13,7 +13,6 @@
 
 import { NativeModules, Platform, Share } from 'react-native';
 import PDFTextExtractor from '../utils/PDFTextExtractor';
-import licenseManager, { ProFeature } from '../license/LicenseManager';
 
 const { PDFExporter } = NativeModules;
 
@@ -167,9 +166,7 @@ export class ExportManager {
      * @returns {Promise<Array>} Array of image paths
      */
     async exportToImages(filePath, options = {}) {
-        // ⚠️ PRO FEATURE - Requires license
-        licenseManager.requirePro('Export to Images');
-
+        // All features enabled by default
         const {
             pages = null, // null = all pages
             format = ExportFormat.JPEG,
@@ -230,11 +227,7 @@ export class ExportManager {
         });
 
         try {
-            // ⚠️ PRO FEATURE - Requires license
-            console.log('🔑 [ExportManager] Checking license for Export to Images...');
-            licenseManager.requirePro('Export to Images');
-            console.log('✅ [ExportManager] License check passed');
-
+            // All features enabled by default
             if (this.isNativeAvailable) {
                 console.log('📱 [ExportManager] Calling native PDFExporter.exportPageToImage...');
                 console.log('📱 [ExportManager] Parameters:', {
@@ -277,9 +270,7 @@ export class ExportManager {
      * @returns {Promise<string>} Path to merged PDF
      */
     async mergePDFs(filePaths, outputPath = null) {
-        // ⚠️ PRO FEATURE - Requires license
-        licenseManager.requirePro('PDF Operations');
-
+        // All features enabled by default
         console.log(`📤 ExportManager: Merging ${filePaths.length} PDFs...`);
 
         try {
@@ -313,10 +304,7 @@ export class ExportManager {
         });
 
         try {
-            console.log('🔑 [ExportManager] Checking license for PDF Operations...');
-            licenseManager.requirePro('PDF Operations');
-            console.log('✅ [ExportManager] License check passed');
-
+            // All features enabled by default
             if (this.isNativeAvailable) {
                 console.log('📱 [ExportManager] Calling native PDFExporter.splitPDF...');
                 console.log('📱 [ExportManager] Ranges:', JSON.stringify(ranges));
@@ -354,10 +342,7 @@ export class ExportManager {
         });
 
         try {
-            console.log('🔑 [ExportManager] Checking license for PDF Operations...');
-            licenseManager.requirePro('PDF Operations');
-            console.log('✅ [ExportManager] License check passed');
-
+            // All features enabled by default
             if (this.isNativeAvailable) {
                 // Convert to 0-indexed
                 const pageIndices = pages.map(p => p - 1);

@@ -11,7 +11,6 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import licenseManager, { ProFeature } from '../license/LicenseManager';
 
 const STORAGE_KEY = '@react-native-pdf-jsi/bookmarks';
 const PROGRESS_KEY = '@react-native-pdf-jsi/progress';
@@ -94,10 +93,7 @@ export class BookmarkManager {
     async createBookmark(pdfId, bookmark) {
         await this.initialize();
 
-        // Check if using Pro features (colors)
-        if (bookmark.color && bookmark.color !== '#000000') {
-            licenseManager.requirePro('Bookmark Colors');
-        }
+        // All features enabled by default
 
         const newBookmark = {
             id: this.generateId(),
@@ -255,11 +251,7 @@ export class BookmarkManager {
     async updateProgress(pdfId, progressData) {
         await this.initialize();
 
-        // Basic progress tracking is free
-        // Advanced analytics require Pro
-        if (progressData.timeSpent || progressData.sessions) {
-            licenseManager.requirePro('Reading Progress Tracking');
-        }
+        // All features enabled by default
 
         const currentProgress = this.progress.get(pdfId) || {
             pdfId,

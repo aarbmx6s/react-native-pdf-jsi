@@ -16,7 +16,20 @@ import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
 const { PDFJSIManager } = NativeModules;
 
 // Event emitter for progress updates
-const eventEmitter = PDFJSIManager ? new NativeEventEmitter(PDFJSIManager) : null;
+// Safely create event emitter only if the module supports event listeners
+let eventEmitter = null;
+if (PDFJSIManager) {
+    try {
+        // Check if NativeEventEmitter is available and the module supports events
+        if (typeof NativeEventEmitter !== 'undefined' && 
+            (typeof PDFJSIManager.addListener === 'function' || typeof PDFJSIManager.removeListeners === 'function')) {
+            eventEmitter = new NativeEventEmitter(PDFJSIManager);
+        }
+    } catch (error) {
+        console.warn('[CacheManager] Failed to create NativeEventEmitter:', error);
+        eventEmitter = null;
+    }
+}
 
 class CacheManager {
     constructor() {

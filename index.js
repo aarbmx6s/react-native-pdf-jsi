@@ -20,9 +20,9 @@ import {
     Text,
     requireNativeComponent
 } from 'react-native';
-import PdfViewNativeComponent, {
-    Commands as PdfViewCommands,
-  } from './fabric/RNPDFPdfNativeComponent';
+// Codegen component variables - will be loaded lazily to prevent hooks errors
+let PdfViewNativeComponent = null;
+let PdfViewCommands = null;
 import ReactNativeBlobUtil from 'react-native-blob-util'
 import {ViewPropTypes} from 'deprecated-react-native-prop-types';
 const SHA1 = require('crypto-js/sha1');
@@ -94,7 +94,7 @@ export default class Pdf extends Component {
         scrollEnabled: true,
         enablePaging: false,
         enableRTL: false,
-        trustAllCerts: true,
+        trustAllCerts: false,
         usePDFKit: true,
         singlePage: false,
         onLoadProgress: (percent) => {
@@ -123,6 +123,10 @@ export default class Pdf extends Component {
             jsiAvailable: false,
         };
 
+        // Store downloaded file path in instance variable for immediate access
+        // This ensures path is available when onLoadComplete fires, even before state updates
+        this.downloadedFilePath = '';
+        
         this.lastRNBFTask = null;
         this.pdfJSI = PDFJSI;
         this.initializeJSI();
@@ -184,6 +188,7 @@ export default class Pdf extends Component {
 
         let uri = source.uri || '';
         // first set to initial state
+        this.downloadedFilePath = ''; // Reset instance variable
         if (this._mounted) {
             this.setState({isDownloaded: false, path: '', progress: 0});
         }
@@ -195,6 +200,8 @@ export default class Pdf extends Component {
                 .stat(cacheFile)
                 .then(stats => {
                     if (!Boolean(source.expiration) || (source.expiration * 1000 + stats.lastModified) > (new Date().getTime())) {
+                        // Store in instance variable immediately for onLoadComplete callback
+                        this.downloadedFilePath = cacheFile;
                         if (this._mounted) {
                             this.setState({path: cacheFile, isDownloaded: true});
                         }
@@ -234,6 +241,8 @@ export default class Pdf extends Component {
                     ReactNativeBlobUtil.fs
                         .cp(uri, cacheFile)
                         .then(() => {
+                            // Store in instance variable immediately for onLoadComplete callback
+                            this.downloadedFilePath = cacheFile;
                             if (this._mounted) {
                                 this.setState({path: cacheFile, isDownloaded: true, progress: 1});
                             }
@@ -247,6 +256,8 @@ export default class Pdf extends Component {
                     ReactNativeBlobUtil.fs
                         .writeFile(cacheFile, data, 'base64')
                         .then(() => {
+                            // Store in instance variable immediately for onLoadComplete callback
+                            this.downloadedFilePath = cacheFile;
                             if (this._mounted) {
                                 this.setState({path: cacheFile, isDownloaded: true, progress: 1});
                             }
@@ -256,9 +267,13 @@ export default class Pdf extends Component {
                             this._onError(error)
                         });
                 } else {
+                    // Local file path
+                    const localPath = decodeURIComponent(uri.replace(/file:\/\//i, ''));
+                    // Store in instance variable immediately for onLoadComplete callback
+                    this.downloadedFilePath = localPath;
                     if (this._mounted) {
                        this.setState({
-                            path: decodeURIComponent(uri.replace(/file:\/\//i, '')),
+                            path: localPath,
                             isDownloaded: true,
                         });
                     }
@@ -284,11 +299,32 @@ export default class Pdf extends Component {
         const tempCacheFile = cacheFile + '.tmp';
         this._unlinkFile(tempCacheFile);
 
-        this.lastRNBFTask = ReactNativeBlobUtil.config({
-            // response data will be saved to this path if it has access right.
+        // Ensure cache directory exists before downloading
+        const cacheDir = ReactNativeBlobUtil.fs.dirs.CacheDir;
+        try {
+            const dirExists = await ReactNativeBlobUtil.fs.exists(cacheDir);
+            if (!dirExists) {
+                await ReactNativeBlobUtil.fs.mkdir(cacheDir);
+            }
+        } catch (error) {
+            console.warn('Failed to ensure cache directory exists:', error);
+            // Continue anyway - ReactNativeBlobUtil might handle it
+        }
+
+        // Build config object - conditionally include trusty based on URL protocol and trustAllCerts
+        const isHttps = source.uri && source.uri.startsWith('https://');
+        const config = {
             path: tempCacheFile,
-            trusty: this.props.trustAllCerts,
-        })
+        };
+        
+        // Only include trusty option for HTTPS URLs and only if trustAllCerts is explicitly true
+        // For HTTP URLs, never include trusty option to avoid trust manager errors
+        if (isHttps && this.props.trustAllCerts === true) {
+            config.trusty = true;
+        }
+        // For HTTP or when trustAllCerts is false, omit trusty option entirely
+
+        this.lastRNBFTask = ReactNativeBlobUtil.config(config)
             .fetch(
                 source.method ? source.method : 'GET',
                 source.uri,
@@ -336,6 +372,9 @@ export default class Pdf extends Component {
                 ReactNativeBlobUtil.fs
                     .cp(tempCacheFile, cacheFile)
                     .then(() => {
+                        // Store in instance variable immediately for onLoadComplete callback
+                        // This ensures path is available even if state hasn't updated yet
+                        this.downloadedFilePath = cacheFile;
                         if (this._mounted) {
                             this.setState({path: cacheFile, isDownloaded: true, progress: 1});
                         }
@@ -367,6 +406,12 @@ export default class Pdf extends Component {
         }
     };
 
+    // Public method to get the current PDF file path
+    getPath() {
+        // Return instance variable first (most reliable), then state path
+        return this.downloadedFilePath || this.state.path || '';
+    }
+
     setPage( pageNumber ) {
         if ( (pageNumber === null) || (isNaN(pageNumber)) ) {
             throw new Error('Specified pageNumber is not a number');
@@ -385,6 +430,16 @@ export default class Pdf extends Component {
         
         if (!!global?.nativeFabricUIManager ) {
             if (this._root) {
+                // Lazy load PdfViewCommands if not already loaded
+                if (!PdfViewCommands) {
+                    try {
+                        const codegenModule = require('./fabric/RNPDFPdfNativeComponent');
+                        PdfViewCommands = codegenModule.Commands;
+                    } catch (error) {
+                        console.warn('PdfViewCommands not available:', error);
+                        return;
+                    }
+                }
                 PdfViewCommands.setNativePage(
                     this._root,
                     pageNumber,
@@ -494,22 +549,79 @@ export default class Pdf extends Component {
         let message = event.nativeEvent.message.split('|');
         //__DEV__ && console.log("onChange: " + message);
         if (message.length > 0) {
-            if (message.length > 5) {
-                message[4] = message.splice(4).join('|');
-            }
             if (message[0] === 'loadComplete') {
                 let tableContents;
-                try {
-                    tableContents = message[4]&&JSON.parse(message[4]);
-                } catch(e) {
-                    tableContents = message[4];
+                let filePath;
+                
+                // Handle both old format (without path) and new format (with path)
+                // Old format: loadComplete|pages|width|height|tableContents
+                // New format: loadComplete|pages|width|height|path|tableContents
+                
+                // First, check if we have the new format (6+ parts before splice)
+                const originalLength = message.length;
+                const hasPath = originalLength >= 6;
+                
+                if (hasPath) {
+                    // New format: extract path from message[4], rest is tableContents
+                    filePath = message[4] || '';
+                    // Join everything after path (index 5+) as tableContents JSON
+                    const tableContentsStr = message.slice(5).join('|');
+                    try {
+                        tableContents = tableContentsStr && JSON.parse(tableContentsStr);
+                    } catch(e) {
+                        tableContents = tableContentsStr;
+                    }
+                } else {
+                    // Old format: no path, everything after height (index 4+) is tableContents
+                    filePath = this.downloadedFilePath || this.state.path || '';
+                    // Handle old splice logic for tableContents that might contain |
+                    if (originalLength > 5) {
+                        message[4] = message.splice(4).join('|');
+                    }
+                    try {
+                        tableContents = message[4] && JSON.parse(message[4]);
+                    } catch(e) {
+                        tableContents = message[4];
+                    }
                 }
-                this.props.onLoadComplete && this.props.onLoadComplete(Number(message[1]), this.state.path, {
-                    width: Number(message[2]),
-                    height: Number(message[3]),
-                },
-                tableContents
-                );
+                
+                // Final fallback: use instance variable or state if path from native is empty
+                if (!filePath || filePath.trim() === '') {
+                    filePath = this.downloadedFilePath || this.state.path || '';
+                }
+                
+                // Log path extraction for debugging
+                if (__DEV__) {
+                    console.log('📁 [Pdf] loadComplete - Path extraction:', {
+                        originalMessageLength: originalLength,
+                        hasPathInMessage: hasPath,
+                        fromNativeMessage: hasPath ? (message[4] || 'empty') : 'not in message',
+                        fromInstance: this.downloadedFilePath || 'empty',
+                        fromState: this.state.path || 'empty',
+                        final: filePath || 'empty',
+                    });
+                }
+                
+                // Always call onLoadComplete callback
+                if (this.props.onLoadComplete) {
+                    console.log('📁 [Pdf] Calling onLoadComplete callback with:', {
+                        pages: Number(message[1]),
+                        path: filePath,
+                        width: Number(message[2]),
+                        height: Number(message[3]),
+                    });
+                    this.props.onLoadComplete(Number(message[1]), filePath, {
+                        width: Number(message[2]),
+                        height: Number(message[3]),
+                    },
+                    tableContents
+                    );
+                } else {
+                    console.warn('⚠️ [Pdf] onLoadComplete callback not provided');
+                }
+            } else if (message.length > 5) {
+                // Only apply splice logic for non-loadComplete messages
+                message[4] = message.splice(4).join('|');
             } else if (message[0] === 'pageChanged') {
                 this.props.onPageChanged && this.props.onPageChanged(Number(message[1]), Number(message[2]));
             } else if (message[0] === 'error') {
@@ -583,7 +695,20 @@ export default class Pdf extends Component {
 }
 
 if (Platform.OS === "android" || Platform.OS === "ios") {
-    var PdfCustom = PdfViewNativeComponent;
+    // Load codegen component immediately - it should work after React is initialized
+    try {
+        const codegenModule = require('./fabric/RNPDFPdfNativeComponent');
+        const CodegenComponent = codegenModule.default;
+        PdfViewNativeComponent = CodegenComponent;
+        PdfViewCommands = codegenModule.Commands;
+        var PdfCustom = CodegenComponent;
+    } catch (error) {
+        console.warn('Failed to load codegen component, using fallback:', error);
+        // Use the correct native component name for Android/iOS
+        var PdfCustom = requireNativeComponent('RNPDFPdfView', Pdf, {
+            nativeOnly: {path: true, onChange: true},
+        });
+    }
 }  else if (Platform.OS === "windows") {
     var PdfCustom = requireNativeComponent('RCTPdf', Pdf, {
         nativeOnly: {path: true, onChange: true},

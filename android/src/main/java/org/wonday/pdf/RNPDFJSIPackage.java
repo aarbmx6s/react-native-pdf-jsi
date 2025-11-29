@@ -18,7 +18,7 @@ import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.uimanager.ViewManager;
 
-public class RNPDFPackage implements ReactPackage {
+public class RNPDFJSIPackage implements ReactPackage {
 
     @Override
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
@@ -47,3 +47,4 @@ public class RNPDFPackage implements ReactPackage {
         return modules;
     }
 }
+

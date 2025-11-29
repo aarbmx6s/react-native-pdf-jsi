@@ -75,18 +75,23 @@ class PDFJSIManager {
         this.cacheMetrics = new Map();
         this.initializationPromise = null;
         
-        this.initializeJSI();
+        // Don't initialize JSI in constructor - it will be initialized lazily when first accessed
+        // This prevents hooks from being called before React is ready
     }
     
     /**
      * Initialize JSI availability check
+     * This is now called lazily when first accessed, not at module load
      */
     async initializeJSI() {
         if (this.initializationPromise) {
             return this.initializationPromise;
         }
         
-        this.initializationPromise = this.checkJSIAvailability();
+        // Defer initialization to prevent hooks from being called before React is ready
+        this.initializationPromise = Promise.resolve().then(() => {
+            return this.checkJSIAvailability();
+        });
         return this.initializationPromise;
     }
     
@@ -814,8 +819,28 @@ class PDFJSIManager {
     }
 }
 
-// Create singleton instance
-const pdfJSIManager = new PDFJSIManager();
+// Create singleton instance lazily to prevent initialization before React is ready
+let pdfJSIManagerInstance = null;
+
+const getPDFJSIManager = () => {
+    if (!pdfJSIManagerInstance) {
+        pdfJSIManagerInstance = new PDFJSIManager();
+    }
+    return pdfJSIManagerInstance;
+};
+
+// Export a proxy that lazy-loads the instance
+const pdfJSIManager = new Proxy({}, {
+    get(target, prop) {
+        const instance = getPDFJSIManager();
+        const value = instance[prop];
+        // If it's a method, bind it to the instance
+        if (typeof value === 'function') {
+            return value.bind(instance);
+        }
+        return value;
+    }
+});
 
 export default pdfJSIManager;
 

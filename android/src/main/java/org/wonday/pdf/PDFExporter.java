@@ -31,13 +31,11 @@ import android.graphics.pdf.PdfDocument;
 
 public class PDFExporter extends ReactContextBaseJavaModule {
     private static final String TAG = "PDFExporter";
-    private LicenseVerifier licenseVerifier;
     // OPTIMIZATION: Bitmap pool for 90% reduction in bitmap allocations
     private final BitmapPool bitmapPool = new BitmapPool();
 
     public PDFExporter(ReactApplicationContext reactContext) {
         super(reactContext);
-        licenseVerifier = new LicenseVerifier(reactContext);
     }
 
     @Override
@@ -69,11 +67,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
     @ReactMethod
     public void exportToImages(String filePath, ReadableMap options, Promise promise) {
         try {
-            if (!licenseVerifier.isProActive()) {
-                promise.reject("LICENSE_REQUIRED", "Export to Images requires a Pro license");
-                return;
-            }
-
             if (filePath == null || filePath.isEmpty()) {
                 promise.reject("INVALID_PATH", "File path is required");
                 return;
@@ -113,15 +106,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
             double scale = options.hasKey("scale") ? options.getDouble("scale") : 2.0;
             
             Log.i(TAG, "🖼️ [EXPORT] exportPageToImage - START - page: " + pageIndex + ", format: " + format + ", quality: " + quality + ", scale: " + scale);
-            
-            boolean licenseActive = licenseVerifier.isProActive();
-            Log.i(TAG, "🔑 [LICENSE] isProActive: " + licenseActive);
-            
-            if (!licenseActive) {
-                Log.e(TAG, "❌ [EXPORT] exportPageToImage - FAILED - License required");
-                promise.reject("LICENSE_REQUIRED", "Export to Images requires a Pro license");
-                return;
-            }
 
             if (filePath == null || filePath.isEmpty()) {
                 Log.e(TAG, "❌ [EXPORT] exportPageToImage - FAILED - Invalid path");
@@ -339,12 +323,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
     @ReactMethod
     public void mergePDFs(ReadableArray filePaths, String outputPath, Promise promise) {
         try {
-            // Check Pro license
-            if (!licenseVerifier.isProActive()) {
-                promise.reject("LICENSE_REQUIRED", "PDF Operations requires a Pro license");
-                return;
-            }
-
             if (filePaths == null || filePaths.size() < 2) {
                 promise.reject("INVALID_INPUT", "At least 2 PDF files are required for merging");
                 return;
@@ -478,16 +456,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
             
             // Original code continues...
             Log.i(TAG, "✂️ [SPLIT] splitPDF - START - file: " + filePath + ", ranges: " + pageRanges.size());
-            
-            // Check Pro license
-            boolean licenseActive = licenseVerifier.isProActive();
-            Log.i(TAG, "🔑 [LICENSE] isProActive: " + licenseActive);
-            
-            if (!licenseActive) {
-                Log.e(TAG, "❌ [SPLIT] License required");
-                promise.reject("LICENSE_REQUIRED", "PDF Operations requires a Pro license");
-                return;
-            }
 
             if (filePath == null || filePath.isEmpty()) {
                 Log.e(TAG, "❌ [SPLIT] Invalid path");
@@ -607,16 +575,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
     public void extractPages(String filePath, ReadableArray pageNumbers, String outputPath, Promise promise) {
         try {
             Log.i(TAG, "✂️ [EXTRACT] extractPages - START - file: " + filePath + ", pages: " + pageNumbers.size());
-            
-            // Check Pro license
-            boolean licenseActive = licenseVerifier.isProActive();
-            Log.i(TAG, "🔑 [LICENSE] isProActive: " + licenseActive);
-            
-            if (!licenseActive) {
-                Log.e(TAG, "❌ [EXTRACT] License required");
-                promise.reject("LICENSE_REQUIRED", "PDF Operations requires a Pro license");
-                return;
-            }
 
             if (filePath == null || filePath.isEmpty()) {
                 Log.e(TAG, "❌ [EXTRACT] Invalid path");
@@ -717,12 +675,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
     @ReactMethod
     public void rotatePage(String filePath, int pageNumber, int degrees, Promise promise) {
         try {
-            // Check Pro license
-            if (!licenseVerifier.isProActive()) {
-                promise.reject("LICENSE_REQUIRED", "PDF Operations requires a Pro license");
-                return;
-            }
-
             if (filePath == null || filePath.isEmpty()) {
                 promise.reject("INVALID_PATH", "File path is required");
                 return;
@@ -740,12 +692,6 @@ public class PDFExporter extends ReactContextBaseJavaModule {
     @ReactMethod
     public void deletePage(String filePath, int pageNumber, Promise promise) {
         try {
-            // Check Pro license
-            if (!licenseVerifier.isProActive()) {
-                promise.reject("LICENSE_REQUIRED", "PDF Operations requires a Pro license");
-                return;
-            }
-
             if (filePath == null || filePath.isEmpty()) {
                 promise.reject("INVALID_PATH", "File path is required");
                 return;

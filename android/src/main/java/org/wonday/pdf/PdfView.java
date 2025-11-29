@@ -154,7 +154,9 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
 
         //create a new json Object for the TableOfContents
         Gson gson = new Gson();
-        event.putString("message", "loadComplete|"+numberOfPages+"|"+width+"|"+height+"|"+gson.toJson(this.getTableOfContents()));
+        // Include path in loadComplete message for reliable access in JS
+        String pathValue = this.path != null ? this.path : "";
+        event.putString("message", "loadComplete|"+numberOfPages+"|"+width+"|"+height+"|"+pathValue+"|"+gson.toJson(this.getTableOfContents()));
 
         ThemedReactContext context = (ThemedReactContext) getContext();
         EventDispatcher dispatcher = UIManagerHelper.getEventDispatcherForReactTag(context, getId());
@@ -369,7 +371,15 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
 
     // page start from 1
     public void setPage(int page) {
-        this.page = page>1?page:1;
+        int newPage = page>1?page:1;
+        int oldPage = this.page;
+        this.page = newPage;
+        
+        // If page changed and PDF is already loaded, jump to the new page immediately
+        if (newPage != oldPage && !needsReload && this.path != null && !this.isRecycled()) {
+            showLog(format("setPage: Jumping to page %d (from %d)", newPage, oldPage));
+            this.jumpTo(newPage - 1, false);
+        }
     }
 
     public void setScale(float scale) {

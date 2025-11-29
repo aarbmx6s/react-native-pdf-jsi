@@ -12,10 +12,23 @@ const AnalyticsPanel = ({
   analytics,
   licenseInfo,
 }) => {
-  const timeInMinutes = Math.round(analytics.timeSpent / 60);
+  // Handle null/undefined analytics with defaults
+  const safeAnalytics = analytics || {
+    timeSpent: 0,
+    pagesRead: [],
+    totalPages: 0,
+    percentage: 0,
+    sessions: 0,
+    currentPage: 1,
+    lastRead: null,
+  };
+  
+  const timeInMinutes = Math.round((safeAnalytics.timeSpent || 0) / 60);
+  const pagesReadArray = Array.isArray(safeAnalytics.pagesRead) ? safeAnalytics.pagesRead : [];
+  const totalPages = safeAnalytics.totalPages || 0;
   const readingSpeed =
-    timeInMinutes > 0 ? analytics.pagesRead.length / timeInMinutes : 0;
-  const remainingPages = analytics.totalPages - analytics.pagesRead.length;
+    timeInMinutes > 0 ? pagesReadArray.length / timeInMinutes : 0;
+  const remainingPages = totalPages - pagesReadArray.length;
   const estimatedTimeRemaining =
     readingSpeed > 0 ? Math.round(remainingPages / readingSpeed) : 0;
 
@@ -34,13 +47,13 @@ const AnalyticsPanel = ({
           <View style={styles.progressSection}>
             <View style={styles.progressRing}>
               <Text style={styles.progressPercent}>
-                {analytics.percentage}%
+                {safeAnalytics.percentage || 0}%
               </Text>
               <Text style={styles.progressLabel}>Complete</Text>
             </View>
             <View style={styles.progressStats}>
               <Text style={styles.statValue}>
-                {analytics.pagesRead.length}/{analytics.totalPages}
+                {pagesReadArray.length}/{totalPages}
               </Text>
               <Text style={styles.statLabel}>Pages Read</Text>
             </View>
@@ -64,7 +77,7 @@ const AnalyticsPanel = ({
 
             <View style={styles.statCard}>
               <Text style={styles.statIcon}>🔄</Text>
-              <Text style={styles.statCardValue}>{analytics.sessions}</Text>
+              <Text style={styles.statCardValue}>{safeAnalytics.sessions || 0}</Text>
               <Text style={styles.statCardLabel}>Sessions</Text>
             </View>
 
@@ -81,11 +94,11 @@ const AnalyticsPanel = ({
           <View style={styles.sessionCard}>
             <Text style={styles.sessionTitle}>Current Session</Text>
             <Text style={styles.sessionInfo}>
-              Page {analytics.currentPage} of {analytics.totalPages}
+              Page {safeAnalytics.currentPage || 1} of {totalPages}
             </Text>
-            {analytics.lastRead && (
+            {safeAnalytics.lastRead && (
               <Text style={styles.sessionTime}>
-                Last read: {new Date(analytics.lastRead).toLocaleTimeString()}
+                Last read: {new Date(safeAnalytics.lastRead).toLocaleTimeString()}
               </Text>
             )}
           </View>

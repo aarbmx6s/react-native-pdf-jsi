@@ -8,7 +8,7 @@
 
 ---
 
-## ⚡ Performance Benchmarks (v3.3.0)
+## ⚡ Performance Benchmarks (v3.4.0)
 
 **World-class performance proven with real-world testing:**
 
@@ -86,6 +86,27 @@ Starting November 1, 2025, Google Play will require apps to support 16KB page si
 - ✅ **Android 15+ Ready** - Future-proof architecture  
 - ✅ **Google Play Approved** - Meets all current and future requirements  
 - ✅ **Drop-in Replacement** - Easy migration from existing libraries
+
+## 🎉 Version 3.4.0 - Enhanced Navigation & File Path Handling!
+
+**Major improvements to navigation reliability and file path tracking for better bookmarking, export, and PDF operations!**
+
+### 🚀 **What's New in v3.4.0:**
+
+#### ✨ **New Features**
+- **🎯 Enhanced Navigation** - Immediate page navigation support in `setPage()` method. PDF now jumps to the specified page instantly when navigation is triggered programmatically
+- **📁 Improved File Path Handling** - Added `downloadedFilePath` instance variable for reliable path tracking during PDF loading. Paths are available immediately, even before React state updates
+- **🔍 New `getPath()` Method** - Public method to retrieve the current PDF file path. Returns the most reliable path source (instance variable > state path)
+- **📡 Enhanced Path Extraction** - Improved `onLoadComplete` callback to receive file path directly from native module, ensuring reliable path availability for bookmarking, export, and PDF operations
+
+#### 🐛 **Bug Fixes**
+- **🧭 Navigation Reliability** - Fixed issue where programmatic page navigation would not scroll to the target page. Native `setPage()` method now calls `jumpTo()` immediately when page changes
+- **📄 File Path Availability** - Fixed issue where `pdfFilePath` was sometimes empty in `onLoadComplete`, causing failures in export and PDF operations. Path is now reliably extracted from multiple sources with proper fallbacks
+- **🔧 Native Event Handling** - Enhanced `loadComplete` event message format to include file path, improving reliability of path extraction in JavaScript
+
+#### 🔄 **Technical Improvements**
+- **Native Message Format** - Updated `loadComplete` event format from `loadComplete|pages|width|height|tableContents` to `loadComplete|pages|width|height|path|tableContents` with automatic detection of old/new formats for backward compatibility
+- **Path Tracking** - File paths are now stored in an instance variable (`downloadedFilePath`) immediately upon file preparation/download completion, in addition to React state, ensuring synchronous access
 
 ## 🎉 Version 3.0.0 - Major Release with Complete Feature Sync!
 
@@ -432,13 +453,13 @@ Register the JSI package in your React Native application:
 
 ```java
 // MainApplication.java
-import org.wonday.pdf.RNPDFPackage;
+import org.wonday.pdf.RNPDFJSIPackage;
 
 @Override
 protected List<ReactPackage> getPackages() {
     return Arrays.<ReactPackage>asList(
         new MainReactPackage(),
-        new RNPDFPackage() // This includes JSI modules
+        new RNPDFJSIPackage() // This includes JSI modules
     );
 }
 ```
@@ -1028,7 +1049,7 @@ private static final String FOLDER_NAME = "YourAppName"; // Change this
 -keep class org.wonday.pdf.PDFJSIManager { *; }
 -keep class org.wonday.pdf.PDFJSIModule { *; }
 -keep class org.wonday.pdf.EnhancedPdfJSIBridge { *; }
--keep class org.wonday.pdf.RNPDFPackage { *; }
+-keep class org.wonday.pdf.RNPDFJSIPackage { *; }
 -keep class org.wonday.pdf.PdfManager { *; }
 -keep class org.wonday.pdf.PDFNativeCacheManager { *; }
 -keep class org.wonday.pdf.PdfView { *; }
@@ -1252,7 +1273,25 @@ const Pdf = PdfModule.default;
 
 ## 📝 Changelog
 
-### v3.3.0 (2025-11-12) - Latest ✅ STREAMING BASE64 & CACHE MANAGER
+### v3.4.0 (2025-11-29) - Latest ✅ ENHANCED NAVIGATION & FILE PATH HANDLING
+
+#### ✨ **New Features**
+- **Enhanced Navigation** - Added immediate page navigation support in `setPage()` method. PDF now jumps to the specified page instantly when navigation is triggered programmatically
+- **Improved File Path Handling** - Added `downloadedFilePath` instance variable for reliable path tracking during PDF loading
+- **New `getPath()` Method** - Added public method to retrieve the current PDF file path with multiple fallback sources
+- **Enhanced Path Extraction** - Improved `onLoadComplete` callback to receive file path directly from native module
+
+#### 🐛 **Bug Fixes**
+- **Navigation Reliability** - Fixed programmatic page navigation not scrolling to target page
+- **File Path Availability** - Fixed empty `pdfFilePath` in `onLoadComplete` causing export/operation failures
+- **Native Event Handling** - Enhanced `loadComplete` event message format to include file path
+
+#### 🔄 **Technical Changes**
+- Native `loadComplete` event now includes file path for improved reliability
+- Backward compatible with old message format (auto-detects)
+- Path stored in instance variable immediately upon file preparation
+
+### v3.3.0 (2025-11-12) - STREAMING BASE64 & CACHE MANAGER
 
 #### 🚀 **Major Features**
 
@@ -1969,7 +2008,7 @@ For bug reports, include:
 
 *Transform your PDF viewing experience with enterprise-grade performance and reliability.*
 
-**v2.2.7 - iOS Codegen Fix & New Architecture Support**  
+**v3.4.0 - Enhanced Navigation & File Path Handling**  
 **Copyright (c) 2025-present, Punith M (punithm300@gmail.com). Enhanced PDF JSI Integration. All rights reserved.**
 
 *Original work Copyright (c) 2017-present, Wonday (@wonday.org). All rights reserved.*

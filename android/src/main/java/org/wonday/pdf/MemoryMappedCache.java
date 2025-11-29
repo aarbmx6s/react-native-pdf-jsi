@@ -31,7 +31,7 @@ public class MemoryMappedCache {
     // Statistics
     private int totalMaps = 0;
     private int totalUnmaps = 0;
-    private long totalBytesM apped = 0;
+    private long totalBytesMapped = 0;
     
     /**
      * Memory-map a PDF file for zero-copy access
