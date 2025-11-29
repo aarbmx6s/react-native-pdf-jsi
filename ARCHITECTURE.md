@@ -20,7 +20,7 @@ flowchart TB
     
     B --> C
     D --> E
-    H --> I[Result:<br/>6+ GB/s Throughput<br/>O(1) Memory<br/>5x Faster Exports]
+    H --> I["Result:<br/>6+ GB/s Throughput<br/>O(1) Memory<br/>5x Faster Exports"]
     
     style I fill:#FFD700,stroke:#FF6347,stroke-width:3px
 ```
@@ -33,12 +33,12 @@ flowchart TB
 flowchart LR
     A[88 MB PDF] --> B{Approach}
     
-    B -->|Traditional<br/>Full Load| C[Load All<br/>88 MB RAM<br/>😱 Crash on 1GB]
+    B -->|"Traditional<br/>Full Load"| C["Load All<br/>88 MB RAM<br/>Crash on 1GB"]
     
-    B -->|Our Streaming<br/>Approach| D[Process Chunks<br/>1MB at a time<br/>✅ Constant 2MB]
+    B -->|"Our Streaming<br/>Approach"| D["Process Chunks<br/>1MB at a time<br/>Constant 2MB"]
     
-    C --> E[❌ Memory: O(n)<br/>Scales with file size]
-    D --> F[✅ Memory: O(1)<br/>Handles 10GB+ files]
+    C --> E["Memory: O(n)<br/>Scales with file size"]
+    D --> F["Memory: O(1)<br/>Handles 10GB+ files"]
     
     style D fill:#90EE90,stroke:#006400,stroke-width:2px
     style F fill:#FFD700,stroke:#FF6347,stroke-width:2px
@@ -52,11 +52,11 @@ flowchart LR
 flowchart TD
     A[Export Page Request] --> B{Format Selection}
     
-    B -->|PNG<br/>Lossless| C[100% Quality<br/>52ms compress<br/>219 KB file]
+    B -->|"PNG<br/>Lossless"| C["100% Quality<br/>52ms compress<br/>219 KB file"]
     
-    B -->|JPEG<br/>Recommended| D[90% Quality<br/>16ms compress<br/>172 KB file<br/>🚀 5.2x FASTER]
+    B -->|"JPEG<br/>Recommended"| D["90% Quality<br/>16ms compress<br/>172 KB file<br/>5.2x FASTER"]
     
-    B -->|WebP<br/>Modern| E[90% Quality<br/>~25ms compress<br/>~150 KB file<br/>⚡ 3x FASTER]
+    B -->|"WebP<br/>Modern"| E["90% Quality<br/>~25ms compress<br/>~150 KB file<br/>3x FASTER"]
     
     D --> F[Best for:<br/>General use, photos<br/>Real-time export]
     
