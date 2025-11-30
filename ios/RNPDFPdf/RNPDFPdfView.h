@@ -19,6 +19,24 @@
 
 #ifdef RCT_NEW_ARCH_ENABLED
 #import <React/RCTViewComponentView.h>
+#import <React/RCTComponentViewProtocol.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Forward declaration for codegen - ensures RNPDFPdfViewCls() is visible to RCTThirdPartyComponentsProvider
+// Using extern "C" for proper C linkage, matching React Native's pattern
+Class<RCTComponentViewProtocol> RNPDFPdfViewCls(void);
+
+// Alias function based on codegen name "rnpdf" - ensures codegen can find the function
+// even if it uses the codegen name instead of componentProvider name
+Class<RCTComponentViewProtocol> rnpdfCls(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 
 @class RCTEventDispatcher;
@@ -29,7 +47,7 @@ RCTViewComponentView
 #else
 UIView
 #endif
-<UIGestureRecognizerDelegate>
+<UIGestureRecognizerDelegate, UIScrollViewDelegate>
 - (instancetype)initWithBridge:(RCTBridge *)bridge;
 
 @property(nonatomic, strong) NSString *path;

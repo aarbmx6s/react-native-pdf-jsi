@@ -66,6 +66,8 @@ const float MIN_SCALE = 1.0f;
     RCTBridge *_bridge;
     PDFDocument *_pdfDocument;
     PDFView *_pdfView;
+    UIScrollView *_internalScrollView;
+    id<UIScrollViewDelegate> _originalScrollDelegate;
     PDFOutline *root;
     float _fixScaleFactor;
     bool _initialed;
@@ -103,13 +105,45 @@ using namespace facebook::react;
 
 + (ComponentDescriptorProvider)componentDescriptorProvider
 {
-  return concreteComponentDescriptorProvider<RNPDFPdfViewComponentDescriptor>();
+  // Defensive check: Ensure the descriptor class exists before returning
+  // This prevents nil object insertion in RCTThirdPartyComponentsProvider
+  // The component name must match the codegen name: "RNPDFPdfView"
+  // Using static to ensure the provider is initialized only once
+  static ComponentDescriptorProvider provider = concreteComponentDescriptorProvider<RNPDFPdfViewComponentDescriptor>();
+  return provider;
 }
 
 // Needed because of this: https://github.com/facebook/react-native/pull/37274
 + (void)load
 {
   [super load];
+  
+  // Force class to be loaded before React Native tries to register it
+  // This ensures RNPDFPdfViewCls() returns a valid class, preventing nil insertion
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    // Force class initialization by accessing the class
+    Class cls = [self class];
+    if (cls == nil) {
+      RCTLogError(@"RNPDFPdfView: Class is nil in +load");
+      return;
+    }
+    
+    // Ensure component name is properly set for registration
+    // This helps React Native's RCTThirdPartyComponentsProvider find the component
+    // The component name must match the codegen name: "RNPDFPdfView"
+    NSString *componentName = NSStringFromClass(cls);
+    if (componentName == nil || componentName.length == 0) {
+      RCTLogError(@"RNPDFPdfView: Component name is nil or empty");
+    } else if (![componentName isEqualToString:@"RNPDFPdfView"]) {
+      RCTLogWarn(@"RNPDFPdfView: Component name mismatch. Expected 'RNPDFPdfView', got '%@'", componentName);
+    }
+    
+    // Verify class is accessible (RNPDFPdfViewCls is defined later, so we just verify the class itself)
+    if (cls != RNPDFPdfView.class) {
+      RCTLogError(@"RNPDFPdfView: Class mismatch in +load");
+    }
+  });
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -196,11 +230,6 @@ using namespace facebook::react;
         [updatedPropNames addObject:@"scrollEnabled"];
     }
     
-    if (_enableMomentum != newProps.enableMomentum) {
-        _enableMomentum = newProps.enableMomentum;
-        [updatedPropNames addObject:@"enableMomentum"];
-    }
-
     [super updateProps:props oldProps:oldProps];
     [self didSetProps:updatedPropNames];
 }
@@ -255,7 +284,7 @@ using namespace facebook::react;
 
 - (void)setNativePage:(NSInteger)page
 {
-    _page = page;
+    _page = (int)page;
     [self didSetProps:[NSArray arrayWithObject:@"page"]];
 }
 
@@ -289,7 +318,6 @@ using namespace facebook::react;
     _showsHorizontalScrollIndicator = YES;
     _showsVerticalScrollIndicator = YES;
     _scrollEnabled = YES;
-    _enableMomentum = YES;
 
     // Enhanced properties
     _enableCaching = YES;
@@ -529,37 +557,21 @@ using namespace facebook::react;
             [self setScrollIndicators:self horizontal:_showsHorizontalScrollIndicator vertical:_showsVerticalScrollIndicator depth:0];
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"scrollEnabled"])) {
-            if (_scrollEnabled) {
-                for (UIView *subview in _pdfView.subviews) {
-                    if ([subview isKindOfClass:[UIScrollView class]]) {
-                        UIScrollView *scrollView = (UIScrollView *)subview;
-                        scrollView.scrollEnabled = YES;
-                    }
-                }
-            } else {
-                for (UIView *subview in _pdfView.subviews) {
-                    if ([subview isKindOfClass:[UIScrollView class]]) {
-                        UIScrollView *scrollView = (UIScrollView *)subview;
-                        scrollView.scrollEnabled = NO;
-                    }
-                }
-            }
-        }
-        
-        // Apply momentum property
+        // Configure scroll view (scrollEnabled)
         if (_pdfDocument && ([changedProps containsObject:@"path"] || 
-                             [changedProps containsObject:@"enableMomentum"])) {
-            for (UIView *subview in _pdfView.subviews) {
-                if ([subview isKindOfClass:[UIScrollView class]]) {
-                    UIScrollView *scrollView = (UIScrollView *)subview;
-                    
-                    // Apply momentum (bounces)
-                    scrollView.bounces = _enableMomentum;
-                    scrollView.alwaysBounceVertical = _enableMomentum;
-                    scrollView.alwaysBounceHorizontal = _enableMomentum;
-                }
+                             [changedProps containsObject:@"scrollEnabled"])) {
+            // If path changed, restore original delegate before reconfiguring
+            if ([changedProps containsObject:@"path"] && _internalScrollView && _originalScrollDelegate) {
+                _internalScrollView.delegate = _originalScrollDelegate;
+                _internalScrollView = nil;
+                _originalScrollDelegate = nil;
             }
+            
+            // Use dispatch_async to ensure view hierarchy is fully set up after document load
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // Search within _pdfView's hierarchy for scroll views
+                [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
+            });
         }
 
         if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enablePaging"] || [changedProps containsObject:@"horizontal"] || [changedProps containsObject:@"page"])) {
@@ -796,7 +808,7 @@ using namespace facebook::react;
  *  Tap
  *  zoom reset or zoom in
  *
- *  @param recognizer
+ *  @param recognizer The tap gesture recognizer
  */
 - (void)handleDoubleTap:(UITapGestureRecognizer *)recognizer
 {
@@ -869,7 +881,7 @@ using namespace facebook::react;
  *  Single Tap
  *  stop zoom
  *
- *  @param recognizer
+ *  @param sender The tap gesture recognizer
  */
 - (void)handleSingleTap:(UITapGestureRecognizer *)sender
 {
@@ -893,7 +905,7 @@ using namespace facebook::react;
  *  Pinch
  *
  *
- *  @param recognizer
+ *  @param sender The pinch gesture recognizer
  */
 -(void)handlePinch:(UIPinchGestureRecognizer *)sender{
     [self onScaleChanged:Nil];
@@ -990,6 +1002,83 @@ using namespace facebook::react;
     }
 }
 
+- (void)configureScrollView:(UIView *)view enabled:(BOOL)enabled depth:(int)depth {
+    // max depth, prevent infinite loop
+    if (depth > 10) {
+        return;
+    }
+    
+    if ([view isKindOfClass:[UIScrollView class]]) {
+        UIScrollView *scrollView = (UIScrollView *)view;
+        // Since we're starting the recursion from _pdfView, all scroll views found are within its hierarchy
+        // Configure scroll properties
+        scrollView.scrollEnabled = enabled;
+        
+        // Disable horizontal bouncing to prevent interference with navigation swipe-back
+        scrollView.alwaysBounceHorizontal = NO;
+        // Keep vertical bounce enabled for natural scrolling feel
+        scrollView.bounces = YES;
+        
+        // Set delegate for scroll tracking (only once to avoid conflicts)
+        // Store original delegate before replacing it to preserve PDFView's internal scrolling
+        if (!_internalScrollView) {
+            _internalScrollView = scrollView;
+            // Store original delegate if it exists and is not us
+            if (scrollView.delegate && scrollView.delegate != self) {
+                _originalScrollDelegate = scrollView.delegate;
+            }
+            scrollView.delegate = self;
+        }
+    }
+    
+    for (UIView *subview in view.subviews) {
+        [self configureScrollView:subview enabled:enabled depth:depth + 1];
+    }
+}
+
+#pragma mark - UIScrollViewDelegate
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    // Forward to original delegate first if it exists (important for PDFView's scrolling)
+    if (_originalScrollDelegate && [_originalScrollDelegate respondsToSelector:@selector(scrollViewDidScroll:)]) {
+        [_originalScrollDelegate scrollViewDidScroll:scrollView];
+    }
+    
+    if (!_pdfDocument || _singlePage) {
+        return;
+    }
+    
+    // Calculate visible page based on scroll position
+    // Use the center point of the visible viewport
+    CGPoint centerPoint = CGPointMake(
+        scrollView.contentOffset.x + scrollView.bounds.size.width / 2,
+        scrollView.contentOffset.y + scrollView.bounds.size.height / 2
+    );
+    
+    // Convert to PDFView coordinates
+    CGPoint pdfPoint = [scrollView convertPoint:centerPoint toView:_pdfView];
+    PDFPage *visiblePage = [_pdfView pageForPoint:pdfPoint nearest:YES];
+    
+    if (visiblePage) {
+        unsigned long pageIndex = [_pdfDocument indexForPage:visiblePage];
+        int newPage = (int)pageIndex + 1;
+        
+        // Only update if page actually changed and is valid
+        if (newPage != _page && newPage > 0 && newPage <= (int)_pdfDocument.pageCount) {
+            _page = newPage;
+            _pageCount = (int)_pdfDocument.pageCount;
+            
+            // Trigger preloading if enabled
+            if (_enablePreloading) {
+                [self preloadAdjacentPages:_page];
+            }
+            
+            // Notify about page change
+            [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"pageChanged|%d|%lu", newPage, _pdfDocument.pageCount]]];
+        }
+    }
+}
+
 // Enhanced progressive loading methods
 - (void)preloadAdjacentPages:(int)currentPage
 {
@@ -1069,9 +1158,6 @@ using namespace facebook::react;
     for (int pageIndex = 0; pageIndex < _pdfDocument.pageCount; pageIndex++) {
         PDFPage *page = [_pdfDocument pageAtIndex:pageIndex];
         
-        // Get the page bounds
-        CGRect pageBounds = [page boundsForBox:kPDFDisplayBoxCropBox];
-        
         // Search for text in the page
         PDFSelection *selection = [page selectionForRange:NSMakeRange(0, page.string.length)];
         if (selection && selection.string.length > 0) {
@@ -1105,9 +1191,33 @@ using namespace facebook::react;
 @end
 
 #ifdef RCT_NEW_ARCH_ENABLED
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 Class<RCTComponentViewProtocol> RNPDFPdfViewCls(void)
 {
-    return RNPDFPdfView.class;
+    // Defensive check: Ensure class is loaded and valid before returning
+    // This prevents nil object insertion in RCTThirdPartyComponentsProvider
+    Class cls = RNPDFPdfView.class;
+    if (cls == nil) {
+        RCTLogError(@"RNPDFPdfView: Class is nil in RNPDFPdfViewCls");
+        // Return a fallback to prevent crash, though this shouldn't happen
+        return [RCTViewComponentView class];
+    }
+    return cls;
 }
+
+// Alias function based on codegen name "rnpdf" - ensures codegen can find the function
+// even if it uses the codegen name instead of componentProvider name
+Class<RCTComponentViewProtocol> rnpdfCls(void)
+{
+    return RNPDFPdfViewCls();
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
