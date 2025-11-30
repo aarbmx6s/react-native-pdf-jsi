@@ -144,6 +144,11 @@ public class PdfManager extends SimpleViewManager<PdfView> implements RNPDFPdfVi
         // NOOP on Android
     }
 
+    @Override
+    public void setEnableMomentum(PdfView view, boolean value) {
+        // NOOP on Android - momentum scrolling is handled automatically by Android's ScrollView
+    }
+
     @ReactProp(name = "fitPolicy")
     public void setFitPolicy(PdfView pdfView, int fitPolicy) {
         pdfView.setFitPolicy(fitPolicy);
