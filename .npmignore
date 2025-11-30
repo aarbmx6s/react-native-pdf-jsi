@@ -1,0 +1,87 @@
+# Android build artifacts - CRITICAL: Must exclude these
+android/.cxx/
+android/.gradle/
+android/build/
+android/.idea/
+android/*.iml
+android/local.properties
+
+# iOS build artifacts
+ios/build/
+ios/DerivedData/
+ios/Pods/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Windows build artifacts
+windows/bin/
+windows/obj/
+windows/.vs/
+
+# Node modules and package locks
+node_modules/
+package-lock.json
+yarn.lock
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+coverage/
+*.log
+test/
+tests/
+__tests__/
+
+# Documentation files (keep essential ones)
+CHANGELOG.md
+PUBLISH_CHECKLIST.md
+ARCHITECTURE.md
+INTEGRATION_GUIDE.md
+LOCAL_CACHE_PRO_TIP.md
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Source maps and bundles
+*.map
+*.jsbundle
+
+# Lock files
+yarn-error.log
+npm-debug.log
+
+# Generated files
+*.generated.*
+*.codegen.*
+
+# Empty jniLibs (placeholders - these are 0B files)
+android/src/main/jniLibs/**/*.so
+
+# Android build outputs (compiled files)
+**/*.class
+**/*.dex
+**/*.o
+**/*.so
+!android/src/main/jniLibs/**/*.so
