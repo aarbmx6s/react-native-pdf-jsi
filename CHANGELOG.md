@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2025-12-13
+
+### Added
+- **iOS Pro Features Port**: Complete feature parity with Android - all pro features now available on iOS
+  - File download and management (FileDownloader, FileManager)
+  - PDF export operations (split, merge, extract, rotate, delete)
+  - Export to images (PNG/JPEG)
+  - PDF compression
+  - Text extraction
+- **iOS Performance Optimizations**:
+  - ImagePool for efficient UIImage reuse and memory management
+  - LazyMetadataLoader for deferred PDF metadata loading
+  - MemoryMappedCache for zero-copy file access using mmap()
+  - StreamingPDFProcessor for chunk-based processing of large files
+- **Cross-Platform Compatibility**: Platform.OS checks for method signature differences (Android 3 args vs iOS 2 args for splitPDF)
+
+### Fixed
+- **TypeScript Definitions**: Fixed malformed comment blocks in `index.d.ts` that made functional props appear commented out
+  - All props (spacing, password, renderActivityIndicator, enableAntialiasing, enablePaging, enableRTL, enableAnnotationRendering, enableDoubleTapZoom, fitPolicy) now properly documented
+- **Android splitPDF**: Fixed argument count mismatch - Android requires 3 arguments (filePath, ranges, outputDir) while iOS requires 2 (filePath, ranges)
+- **Promise Resolution**: Fixed EXC_BAD_ACCESS crashes by ensuring all promise callbacks execute on main thread
+- **File Download**: Removed unstable native folder creation code, using react-native-blob-util for folder operations
+
+### Changed
+- **FileManager.js**: Removed subfolderName parameters, simplified to use react-native-blob-util for folder creation
+- **ExportManager.js**: Removed folderName parameters, added Platform.OS compatibility checks
+- **iOS FileDownloader**: Simplified implementation, removed subfolder creation logic
+- **iOS FileManager**: Removed native createSubfolder method
+
 ## [3.4.2] - 2025-11-30
 
 ### Fixed

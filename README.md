@@ -8,7 +8,7 @@
 
 ---
 
-## ⚡ Performance Benchmarks (v3.4.0)
+## ⚡ Performance Benchmarks (v4.0.0)
 
 **World-class performance proven with real-world testing:**
 
@@ -86,6 +86,37 @@ Starting November 1, 2025, Google Play will require apps to support 16KB page si
 - ✅ **Android 15+ Ready** - Future-proof architecture  
 - ✅ **Google Play Approved** - Meets all current and future requirements  
 - ✅ **Drop-in Replacement** - Easy migration from existing libraries
+
+## 🎉 Version 4.0.0 - iOS Feature Parity & Major Improvements!
+
+**Complete iOS pro features port with full feature parity between Android and iOS platforms!**
+
+### 🚀 **What's New in v4.0.0:**
+
+#### ✨ **New Features**
+- **📱 iOS Pro Features Port** - Complete feature parity with Android! All pro features now available on iOS:
+  - File download and management (FileDownloader, FileManager)
+  - PDF export operations (split, merge, extract, rotate, delete)
+  - Export to images (PNG/JPEG) with quality control
+  - PDF compression with smart presets
+  - Text extraction and search capabilities
+- **⚡ iOS Performance Optimizations**:
+  - **ImagePool** - Efficient UIImage reuse and memory management
+  - **LazyMetadataLoader** - Deferred PDF metadata loading for faster initial load
+  - **MemoryMappedCache** - Zero-copy file access using mmap() system call
+  - **StreamingPDFProcessor** - Chunk-based processing for large files (60MB-200MB+)
+- **🌐 Cross-Platform Compatibility** - Platform.OS checks for method signature differences (Android 3 args vs iOS 2 args for splitPDF)
+
+#### 🐛 **Bug Fixes**
+- **📝 TypeScript Definitions** - Fixed malformed comment blocks in `index.d.ts` that made functional props appear commented out. All props (spacing, password, renderActivityIndicator, enableAntialiasing, enablePaging, enableRTL, enableAnnotationRendering, enableDoubleTapZoom, fitPolicy) now properly documented
+- **🤖 Android splitPDF** - Fixed argument count mismatch error. Android requires 3 arguments (filePath, ranges, outputDir) while iOS requires 2 (filePath, ranges)
+- **💥 Promise Resolution** - Fixed EXC_BAD_ACCESS crashes by ensuring all promise callbacks execute on main thread
+- **📁 File Download** - Removed unstable native folder creation code, using react-native-blob-util for reliable folder operations
+
+#### 🔄 **Technical Improvements**
+- **Simplified File Management** - Removed subfolderName/folderName parameters, using react-native-blob-util for folder creation
+- **Enhanced Stability** - Removed unstable iOS code that caused crashes, replaced with proven react-native-blob-util implementation
+- **Better Error Handling** - Improved promise handling and thread safety across all native modules
 
 ## 🎉 Version 3.4.0 - Enhanced Navigation & File Path Handling!
 
