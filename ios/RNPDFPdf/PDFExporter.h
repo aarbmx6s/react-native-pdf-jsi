@@ -11,6 +11,6 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-@interface PDFExporter : NSObject <RCTBridgeModule>
+@interface PDFExporter : RCTEventEmitter <RCTBridgeModule>
 
 @end

@@ -40,15 +40,37 @@ export interface PdfProps {
     showsVerticalScrollIndicator?: boolean,
     scrollEnabled?: boolean,
     /**
-    /**
-    /**
+     * Space between pages in pixels
+     */
     spacing?: number,
+    /**
+     * Password for encrypted PDFs
+     */
     password?: string,
+    /**
+     * Custom loading indicator component
+     * @param progress - Progress value from 0 to 1
+     */
     renderActivityIndicator?: (progress: number) => React.ReactElement,
+    /**
+     * Enable antialiasing for smoother rendering
+     */
     enableAntialiasing?: boolean,
+    /**
+     * Enable page-by-page navigation mode
+     */
     enablePaging?: boolean,
+    /**
+     * Enable right-to-left layout support
+     */
     enableRTL?: boolean,
+    /**
+     * Enable rendering of PDF annotations
+     */
     enableAnnotationRendering?: boolean,
+    /**
+     * Enable double-tap to zoom functionality
+     */
     enableDoubleTapZoom?: boolean;
     /**
      * Fit policy.  This will adjust the initial zoom of the PDF based on the initial size of the view and the scale factor.

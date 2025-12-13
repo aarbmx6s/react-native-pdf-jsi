@@ -292,14 +292,13 @@ export class ExportManager {
      * Split PDF into multiple files
      * @param {string} filePath - Path to PDF file
      * @param {Array} ranges - Flat array of page range pairs [start1, end1, start2, end2, ...]
-     * @param {string} outputDir - Output directory
+     * @param {string} outputDir - Output directory (deprecated, not used)
      * @returns {Promise<Array>} Array of split PDF paths
      */
     async splitPDF(filePath, ranges, outputDir = null) {
         console.log(`✂️ [ExportManager] splitPDF - START`, {
             filePath,
             ranges,
-            outputDir,
             rangeCount: ranges.length
         });
 
@@ -309,7 +308,14 @@ export class ExportManager {
                 console.log('📱 [ExportManager] Calling native PDFExporter.splitPDF...');
                 console.log('📱 [ExportManager] Ranges:', JSON.stringify(ranges));
                 
-                const splitPaths = await PDFExporter.splitPDF(filePath, ranges, outputDir);
+                // Android requires 3 arguments (filePath, ranges, outputDir)
+                // iOS only requires 2 arguments (filePath, ranges)
+                let splitPaths;
+                if (Platform.OS === 'android') {
+                    splitPaths = await PDFExporter.splitPDF(filePath, ranges, null);
+                } else {
+                    splitPaths = await PDFExporter.splitPDF(filePath, ranges);
+                }
                 
                 console.log(`✅ [ExportManager] splitPDF - SUCCESS - Split into ${splitPaths.length} files`);
                 console.log('📁 [ExportManager] Split files:', splitPaths);
