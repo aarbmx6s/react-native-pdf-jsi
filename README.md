@@ -257,6 +257,83 @@ const pdfRef = useRef(null);
 pdfRef.current?.setPage(42);
 ```
 
+## ProGuard / R8 Configuration (Android Release Builds)
+
+**IMPORTANT:** If you're using ProGuard or R8 code shrinking in your release builds, you must add the following rules to prevent crashes. These rules preserve JSI classes and native module interfaces that are required at runtime.
+
+Add to your `android/app/proguard-rules.pro` file:
+
+```proguard
+# react-native-pdf-jsi ProGuard Rules
+
+# Keep all JSI-related classes
+-keep class org.wonday.pdf.PDFJSIManager { *; }
+-keep class org.wonday.pdf.PDFJSIModule { *; }
+-keep class org.wonday.pdf.EnhancedPdfJSIBridge { *; }
+-keep class org.wonday.pdf.RNPDFJSIPackage { *; }
+
+# Keep PDF view classes
+-keep class org.wonday.pdf.PdfView { *; }
+-keep class org.wonday.pdf.PdfManager { *; }
+-keep class org.wonday.pdf.RNPDFPackage { *; }
+
+# Keep native methods (JNI)
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Keep JSI interface methods
+-keepclassmembers class * {
+    @com.facebook.react.bridge.ReactMethod *;
+}
+
+# Keep React Native bridge classes
+-keep @com.facebook.react.bridge.ReactModule class * { *; }
+-keep class com.facebook.react.bridge.** { *; }
+
+# Keep Gson classes (used for serialization)
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.google.gson.** { *; }
+-keep class * implements com.google.gson.TypeAdapterFactory
+-keep class * implements com.google.gson.JsonSerializer
+-keep class * implements com.google.gson.JsonDeserializer
+
+# Keep PdfiumAndroid classes
+-keep class io.legere.pdfiumandroid.** { *; }
+-keep class com.github.barteksc.pdfviewer.** { *; }
+
+# Keep file downloader and manager classes
+-keep class org.wonday.pdf.FileDownloader { *; }
+-keep class org.wonday.pdf.FileManager { *; }
+
+# Preserve line numbers for crash reporting
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+```
+
+### Why These Rules Are Critical
+
+Without these ProGuard rules, your release builds may experience:
+- **JSI initialization failures** - Native methods won't be accessible
+- **PDF rendering crashes** - Required classes may be obfuscated
+- **Event handler failures** - React Native bridge methods may be removed
+- **Serialization errors** - Gson classes needed for data conversion
+
+### Testing ProGuard Configuration
+
+After adding these rules, always test your release build:
+
+```bash
+# Build release APK
+cd android && ./gradlew assembleRelease
+
+# Test on device
+adb install app/build/outputs/apk/release/app-release.apk
+```
+
+If you encounter crashes, check the stack trace and add additional `-keep` rules for any classes mentioned in the error logs.
+
 ## Google Play 16KB Compliance
 
 Starting November 1, 2025, Google Play requires apps to support 16KB page sizes for Android 15+ devices. **react-native-pdf-jsi is fully compliant** with this requirement.

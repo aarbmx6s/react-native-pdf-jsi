@@ -670,9 +670,31 @@ using namespace facebook::react;
         PDFPage *page = [_pdfDocument pageAtIndex:_pdfDocument.pageCount-1];
         CGSize pageSize = [_pdfView rowSizeForPage:page];
         NSString *jsonString = [self getTableContents];
-
-        [self notifyOnChangeWithMessage:
-         [[NSString alloc] initWithString:[NSString stringWithFormat:@"loadComplete|%lu|%f|%f|%@", numberOfPages, pageSize.width, pageSize.height,jsonString]]];
+        
+        // Include path in loadComplete message for consistency with Android and reliable path access in JS
+        // Format: loadComplete|numberOfPages|width|height|path|tableContents
+        NSString *pathValue = @"";
+        if (_path != nil && _path.length > 0) {
+            pathValue = _path;
+        } else if (_pdfDocument.documentURL != nil) {
+            // Fallback: try to get path from document URL
+            pathValue = _pdfDocument.documentURL.path;
+        }
+        
+        // Debug logging to verify path is being included (using RCTLog so it shows in all builds)
+        RCTLogInfo(@"🔍 [iOS] loadComplete: numberOfPages=%lu, width=%f, height=%f, path='%@', pathLength=%lu", 
+                   numberOfPages, pageSize.width, pageSize.height, pathValue, (unsigned long)pathValue.length);
+        
+        // Ensure path is always included in message (even if empty) for consistent parsing
+        // Format: loadComplete|numberOfPages|width|height|path|tableContents
+        // Use explicit format to ensure path segment is always present
+        NSString *message = [NSString stringWithFormat:@"loadComplete|%lu|%f|%f|%@|%@", 
+                            numberOfPages, pageSize.width, pageSize.height, 
+                            (pathValue != nil ? pathValue : @""), jsonString];
+        
+        RCTLogInfo(@"🔍 [iOS] loadComplete message: %@", message);
+        
+        [self notifyOnChangeWithMessage:message];
     }
 
 }

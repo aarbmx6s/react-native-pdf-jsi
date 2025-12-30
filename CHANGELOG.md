@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Android onLoadComplete Callback**: Fixed critical issue where `onLoadComplete` prop was not firing on Android devices
+  - **Note**: iOS was not affected by this issue. iOS uses a notification-based approach (`PDFViewDocumentChangedNotification`) which is inherently more reliable. This fix is Android-specific.
   - Added comprehensive error handling in `loadComplete()` to ensure events are always dispatched even if errors occur during page size retrieval, zoom operations, or table of contents serialization
   - Implemented delayed event dispatch using `Handler.post()` to ensure React component is mounted and ready before dispatching `loadComplete` event, fixing timing issues
   - Restored `drawPdf()` call in `onAfterUpdateTransaction()` to ensure PDF loads properly on initial mount
@@ -20,9 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical Details
 - **PdfView.java**: Added `loadCompleteDispatched` and `lastKnownPageCount` tracking flags, delayed dispatch mechanism, and comprehensive error handling
 - **PdfManager.java**: Restored `drawPdf()` call in `onAfterUpdateTransaction()` method
+- **RNPDFPdfView.mm (iOS)**: Updated `onDocumentChanged` to include file path in `loadComplete` message for consistency with Android format
 - **index.js**: Added debug logging for event tracking in development mode
 
-This fix resolves the regression similar to [react-native-pdf issue #899](https://github.com/wonday/react-native-pdf/issues/899) and ensures reliable `onLoadComplete` callback execution on Android.
+This fix resolves the regression similar to [react-native-pdf issue #899](https://github.com/wonday/react-native-pdf/issues/899) and ensures reliable `onLoadComplete` callback execution on Android. iOS implementation was also updated to include file path in the message format for consistency.
 
 ## [4.0.0] - 2025-12-13
 
