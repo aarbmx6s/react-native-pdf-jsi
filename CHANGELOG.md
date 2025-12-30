@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2025-12-30
+
+### Fixed
+- **Android onLoadComplete Callback**: Fixed critical issue where `onLoadComplete` prop was not firing on Android devices
+  - Added comprehensive error handling in `loadComplete()` to ensure events are always dispatched even if errors occur during page size retrieval, zoom operations, or table of contents serialization
+  - Implemented delayed event dispatch using `Handler.post()` to ensure React component is mounted and ready before dispatching `loadComplete` event, fixing timing issues
+  - Restored `drawPdf()` call in `onAfterUpdateTransaction()` to ensure PDF loads properly on initial mount
+  - Added duplicate call prevention to avoid multiple `loadComplete` events
+  - Added fallback dispatch mechanism in `drawPdf()` when skipping reload if PDF is already loaded but event wasn't dispatched
+  - Enhanced logging for debugging event dispatch issues
+  - Resets event tracking flags when PDF path changes to ensure `onLoadComplete` fires for new documents
+
+### Technical Details
+- **PdfView.java**: Added `loadCompleteDispatched` and `lastKnownPageCount` tracking flags, delayed dispatch mechanism, and comprehensive error handling
+- **PdfManager.java**: Restored `drawPdf()` call in `onAfterUpdateTransaction()` method
+- **index.js**: Added debug logging for event tracking in development mode
+
+This fix resolves the regression similar to [react-native-pdf issue #899](https://github.com/wonday/react-native-pdf/issues/899) and ensures reliable `onLoadComplete` callback execution on Android.
+
 ## [4.0.0] - 2025-12-13
 
 ### Added
