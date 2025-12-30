@@ -144,7 +144,6 @@ public class PdfManager extends SimpleViewManager<PdfView> implements RNPDFPdfVi
         // NOOP on Android
     }
 
-    @Override
     public void setEnableMomentum(PdfView view, boolean value) {
         // NOOP on Android - momentum scrolling is handled automatically by Android's ScrollView
     }
@@ -179,8 +178,9 @@ public class PdfManager extends SimpleViewManager<PdfView> implements RNPDFPdfVi
     @Override
     public void onAfterUpdateTransaction(PdfView pdfView) {
         super.onAfterUpdateTransaction(pdfView);
-        // Removed pdfView.drawPdf() - PdfView now manages reload internally
-        // to prevent unnecessary document recreation on scroll/prop updates
+        // Call drawPdf() to ensure PDF loads initially and when path changes
+        // The drawPdf() method internally checks if reload is needed to prevent unnecessary reloads
+        pdfView.drawPdf();
     }
 
 }

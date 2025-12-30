@@ -20,6 +20,8 @@ import android.net.Uri;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.graphics.Canvas;
+import android.os.Handler;
+import android.os.Looper;
 
 
 import com.facebook.react.uimanager.ThemedReactContext;
@@ -85,6 +87,8 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     private boolean needsReload = true;
     private String lastLoadedPath = null;
     private float lastPageHeight = 0;
+    private boolean loadCompleteDispatched = false;
+    private int lastKnownPageCount = 0;
 
     // used to store the parameters for `super.onSizeChanged`
     private int oldW = 0;
@@ -100,6 +104,17 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
         page = page+1;
         this.page = page;
         showLog(format("%s %s / %s", path, page, numberOfPages));
+        
+        // Store page count when we get it (useful for loadComplete dispatch)
+        if (numberOfPages > 0 && lastKnownPageCount == 0) {
+            lastKnownPageCount = numberOfPages;
+        }
+        
+        // Note: We don't dispatch loadComplete from onPageChanged anymore because:
+        // 1. The PDF library's onLoad callback should call loadComplete() directly
+        // 2. If it doesn't, we've already fixed it in loadComplete() with delayed dispatch
+        // 3. This prevents duplicate loadComplete events
+        // The delayed dispatch in loadComplete() ensures React component is ready
 
         WritableMap event = Arguments.createMap();
         event.putString("message", "pageChanged|"+page+"|"+numberOfPages);
@@ -145,27 +160,75 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
 
     @Override
     public void loadComplete(int numberOfPages) {
-        SizeF pageSize = getPageSize(0);
-        float width = pageSize.getWidth();
-        float height = pageSize.getHeight();
+        // Prevent duplicate calls - if already dispatched, skip
+        if (loadCompleteDispatched) {
+            showLog("loadComplete: Already dispatched, skipping duplicate call");
+            return;
+        }
+        showLog("loadComplete called with " + numberOfPages + " pages, loadCompleteDispatched=" + loadCompleteDispatched);
+        // Store the page count for later use
+        lastKnownPageCount = numberOfPages;
+        
+        float width = 0;
+        float height = 0;
+        
+        try {
+            SizeF pageSize = getPageSize(0);
+            if (pageSize != null) {
+                width = pageSize.getWidth();
+                height = pageSize.getHeight();
+            }
+        } catch (Exception e) {
+            showLog("Error getting page size in loadComplete: " + e.getMessage());
+            // Continue with default values to ensure event is dispatched
+        }
 
-        this.zoomTo(this.scale);
+        try {
+            this.zoomTo(this.scale);
+        } catch (Exception e) {
+            showLog("Error setting zoom in loadComplete: " + e.getMessage());
+            // Continue even if zoom fails
+        }
+        
         WritableMap event = Arguments.createMap();
 
         //create a new json Object for the TableOfContents
         Gson gson = new Gson();
+        String tableOfContents = "";
+        try {
+            tableOfContents = gson.toJson(this.getTableOfContents());
+        } catch (Exception e) {
+            showLog("Error serializing table of contents: " + e.getMessage());
+            // Continue with empty table of contents
+        }
+        
         // Include path in loadComplete message for reliable access in JS
         String pathValue = this.path != null ? this.path : "";
-        event.putString("message", "loadComplete|"+numberOfPages+"|"+width+"|"+height+"|"+pathValue+"|"+gson.toJson(this.getTableOfContents()));
+        event.putString("message", "loadComplete|"+numberOfPages+"|"+width+"|"+height+"|"+pathValue+"|"+tableOfContents);
 
         ThemedReactContext context = (ThemedReactContext) getContext();
-        EventDispatcher dispatcher = UIManagerHelper.getEventDispatcherForReactTag(context, getId());
+        final EventDispatcher dispatcher = UIManagerHelper.getEventDispatcherForReactTag(context, getId());
         int surfaceId = UIManagerHelper.getSurfaceId(this);
 
-        TopChangeEvent tce = new TopChangeEvent(surfaceId, getId(), event);
+        final TopChangeEvent tce = new TopChangeEvent(surfaceId, getId(), event);
 
         if (dispatcher != null) {
-            dispatcher.dispatchEvent(tce);
+            showLog("loadComplete: Dispatching event with message: " + event.getString("message"));
+            // Post to next frame to ensure React component is ready to receive events
+            // This fixes timing issues where event is dispatched before component is mounted
+            final PdfView self = this;
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    if (dispatcher != null) {
+                        dispatcher.dispatchEvent(tce);
+                        self.loadCompleteDispatched = true;
+                        showLog("loadComplete: Event dispatched successfully (delayed)");
+                    }
+                }
+            });
+        } else {
+            showLog("EventDispatcher is null, cannot dispatch loadComplete event");
         }
         //        ReactContext reactContext = (ReactContext)this.getContext();
 //        reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
@@ -296,6 +359,11 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
             if (this.page > 0 && !this.isRecycled()) {
                 this.jumpTo(this.page - 1, false);
             }
+            // If PDF is already loaded but loadComplete event hasn't been dispatched yet, dispatch it now
+            if (!loadCompleteDispatched && !this.isRecycled() && lastKnownPageCount > 0) {
+                showLog("drawPdf: PDF already loaded but loadComplete not dispatched, dispatching now with " + lastKnownPageCount + " pages");
+                loadComplete(lastKnownPageCount);
+            }
             return;
         }
         showLog(format("drawPdf path:%s %s", this.path, this.page));
@@ -367,6 +435,9 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
         // Path changed - need to reload document
         needsReload = true;
         this.path = path;
+        // Reset flags when path changes
+        loadCompleteDispatched = false;
+        lastKnownPageCount = 0;
     }
 
     // page start from 1

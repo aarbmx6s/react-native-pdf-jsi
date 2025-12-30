@@ -547,9 +547,14 @@ export default class Pdf extends Component {
     _onChange = (event) => {
 
         let message = event.nativeEvent.message.split('|');
-        //__DEV__ && console.log("onChange: " + message);
+        if (__DEV__) {
+            console.log("📥 [Pdf] onChange received:", message[0], "full message:", event.nativeEvent.message);
+        }
         if (message.length > 0) {
             if (message[0] === 'loadComplete') {
+                if (__DEV__) {
+                    console.log("📥 [Pdf] Processing loadComplete event");
+                }
                 let tableContents;
                 let filePath;
                 
