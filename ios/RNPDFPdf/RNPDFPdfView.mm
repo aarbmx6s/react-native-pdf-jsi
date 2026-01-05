@@ -74,7 +74,6 @@ const float MIN_SCALE = 1.0f;
     NSArray<NSString *> *_changedProps;
     UITapGestureRecognizer *_doubleTapRecognizer;
     UITapGestureRecognizer *_singleTapRecognizer;
-    UIPinchGestureRecognizer *_pinchRecognizer;
     UILongPressGestureRecognizer *_longPressRecognizer;
     UITapGestureRecognizer *_doubleTapEmptyRecognizer;
     
@@ -255,7 +254,6 @@ using namespace facebook::react;
     // remove old recognizers before adding new ones
     [self removeGestureRecognizer:_doubleTapRecognizer];
     [self removeGestureRecognizer:_singleTapRecognizer];
-    [self removeGestureRecognizer:_pinchRecognizer];
     [self removeGestureRecognizer:_longPressRecognizer];
     [self removeGestureRecognizer:_doubleTapEmptyRecognizer];
 
@@ -655,7 +653,6 @@ using namespace facebook::react;
 
     _doubleTapRecognizer = nil;
     _singleTapRecognizer = nil;
-    _pinchRecognizer = nil;
     _longPressRecognizer = nil;
     _doubleTapEmptyRecognizer = nil;
 }
@@ -808,10 +805,11 @@ using namespace facebook::react;
 
 - (void)onScaleChanged:(NSNotification *)noti
 {
-
     if (_initialed && _fixScaleFactor>0) {
-        if (_scale != _pdfView.scaleFactor/_fixScaleFactor) {
-            _scale = _pdfView.scaleFactor/_fixScaleFactor;
+        float newScale = _pdfView.scaleFactor/_fixScaleFactor;
+        // Only notify if scale changed significantly (threshold of 0.01 to prevent excessive callbacks)
+        if (fabs(_scale - newScale) > 0.01f) {
+            _scale = newScale;
             [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"scaleChanged|%f", _scale]]];
         }
     }
@@ -924,16 +922,6 @@ using namespace facebook::react;
 }
 
 /**
- *  Pinch
- *
- *
- *  @param sender The pinch gesture recognizer
- */
--(void)handlePinch:(UIPinchGestureRecognizer *)sender{
-    [self onScaleChanged:Nil];
-}
-
-/**
  *  Do nothing on long Press
  *
  *
@@ -970,13 +958,6 @@ using namespace facebook::react;
     _singleTapRecognizer = singleTapRecognizer;
 
     [singleTapRecognizer requireGestureRecognizerToFail:doubleTapRecognizer];
-
-    UIPinchGestureRecognizer *pinchRecognizer = [[UIPinchGestureRecognizer alloc] initWithTarget:self
-                                                                                          action:@selector(handlePinch:)];
-    [self addGestureRecognizer:pinchRecognizer];
-    _pinchRecognizer = pinchRecognizer;
-
-    pinchRecognizer.delegate = self;
 
     UILongPressGestureRecognizer *longPressRecognizer = [[UILongPressGestureRecognizer alloc] initWithTarget:self
                                                                                             action:@selector(handleLongPress:)];

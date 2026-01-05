@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.1] - 2025-01-05
+
+### Fixed
+- **iOS Pinch-to-Zoom**: Fixed critical issue where pinch-to-zoom gestures were not working on iOS devices
+  - Removed interfering custom pinch gesture recognizer that was blocking PDFView's native pinch-to-zoom functionality
+  - Enabled PDFView's native pinch gestures which work through its internal UIScrollView
+  - Updated gesture recognizer delegate to allow simultaneous recognition with PDFView's internal gestures
+  - Improved scale change event throttling to prevent excessive callbacks (0.01 threshold)
+  - Pinch-to-zoom now works smoothly on iOS, matching Android behavior where native library handles gestures
+- **Package Dependencies**: Removed incorrect self-dependency (`react-native-pdf-jsi: ^2.2.4`) from package.json that was causing package managers to install both v4.1.0 and v2.2.4 simultaneously
+
+### Technical Details
+- **RNPDFPdfView.mm (iOS)**: Removed custom `UIPinchGestureRecognizer` and `handlePinch:` method that was consuming pinch gestures without applying them to PDFView
+- **RNPDFPdfView.mm (iOS)**: Explicitly enabled PDFView's native pinch gesture recognizers in gesture recognizer initialization loop
+- **RNPDFPdfView.mm (iOS)**: Updated `onScaleChanged:` method with 0.01 threshold to reduce excessive callbacks for tiny scale changes
+- **RNPDFPdfView.mm (iOS)**: Updated `gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:` to allow PDFView's internal gestures to work simultaneously
+- **package.json**: Removed self-dependency entry
+
+This fix resolves [issue #11](https://github.com/126punith/react-native-pdf-jsi/issues/11) where pinch-to-zoom was not working on iOS while working correctly on Android, and [issue #12](https://github.com/126punith/react-native-pdf-jsi/issues/12) where the package incorrectly listed itself as a dependency causing circular dependency issues.
+
 ## [4.1.0] - 2025-12-30
 
 ### Fixed

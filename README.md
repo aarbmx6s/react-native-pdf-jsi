@@ -21,7 +21,7 @@ High-performance React Native PDF viewer with JSI (JavaScript Interface) acceler
 ### Core Functionality
 - Read PDFs from URL, blob, local file, or asset with caching support
 - Horizontal and vertical display modes
-- Drag and zoom with double-tap support
+- **Pinch-to-zoom** and drag with double-tap support (iOS & Android)
 - Password-protected PDF support
 - Programmatic page navigation
 - Cross-platform support (iOS, Android, Windows)
@@ -407,6 +407,11 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Documentation**: [https://euphonious-faun-24f4bc.netlify.app/](https://euphonious-faun-24f4bc.netlify.app/)
 - **Issues**: [GitHub Issues](https://github.com/126punith/react-native-pdf-jsi/issues)
 - **Author**: Punith M ([@126punith](https://github.com/126punith))
+
+## Recent Fixes
+
+### iOS Pinch-to-Zoom (v4.1.1)
+Fixed critical issue where pinch-to-zoom gestures were not working on iOS. The fix removes interfering custom gesture recognizers and enables PDFView's native pinch-to-zoom functionality, which now works smoothly on both iOS and Android.
 
 ## Changelog
 
