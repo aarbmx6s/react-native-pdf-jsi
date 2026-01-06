@@ -54,6 +54,58 @@
 const float MAX_SCALE = 3.0f;
 const float MIN_SCALE = 1.0f;
 
+
+@interface RNPDFScrollViewDelegateProxy : NSObject <UIScrollViewDelegate>
+- (instancetype)initWithPrimary:(id<UIScrollViewDelegate>)primary secondary:(id<UIScrollViewDelegate>)secondary;
+@end
+
+@implementation RNPDFScrollViewDelegateProxy {
+    __weak id<UIScrollViewDelegate> _primary;
+    __weak id<UIScrollViewDelegate> _secondary;
+}
+
+- (instancetype)initWithPrimary:(id<UIScrollViewDelegate>)primary secondary:(id<UIScrollViewDelegate>)secondary {
+    if (self = [super init]) {
+        _primary = primary;
+        _secondary = secondary;
+    }
+    return self;
+}
+
+- (BOOL)respondsToSelector:(SEL)aSelector {
+    return [super respondsToSelector:aSelector]
+        || (_primary && [_primary respondsToSelector:aSelector])
+        || (_secondary && [_secondary respondsToSelector:aSelector]);
+}
+
+- (id)forwardingTargetForSelector:(SEL)aSelector {
+    if (_primary && [_primary respondsToSelector:aSelector]) {
+        return _primary;
+    }
+    if (_secondary && [_secondary respondsToSelector:aSelector]) {
+        return _secondary;
+    }
+    return [super forwardingTargetForSelector:aSelector];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (_primary && [_primary respondsToSelector:@selector(scrollViewDidScroll:)]) {
+        [_primary scrollViewDidScroll:scrollView];
+    }
+    if (_secondary && [_secondary respondsToSelector:@selector(scrollViewDidScroll:)]) {
+        [_secondary scrollViewDidScroll:scrollView];
+    }
+}
+
+- (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
+    if (_primary && [_primary respondsToSelector:@selector(viewForZoomingInScrollView:)]) {
+        return [_primary viewForZoomingInScrollView:scrollView];
+    }
+    return nil;
+}
+
+@end
+
 @interface RNPDFPdfView() <PDFDocumentDelegate, PDFViewDelegate
 #ifdef RCT_NEW_ARCH_ENABLED
 , RCTRNPDFPdfViewViewProtocol
@@ -68,6 +120,7 @@ const float MIN_SCALE = 1.0f;
     PDFView *_pdfView;
     UIScrollView *_internalScrollView;
     id<UIScrollViewDelegate> _originalScrollDelegate;
+    RNPDFScrollViewDelegateProxy *_scrollDelegateProxy;
     PDFOutline *root;
     float _fixScaleFactor;
     bool _initialed;
@@ -559,10 +612,15 @@ using namespace facebook::react;
         if (_pdfDocument && ([changedProps containsObject:@"path"] || 
                              [changedProps containsObject:@"scrollEnabled"])) {
             // If path changed, restore original delegate before reconfiguring
-            if ([changedProps containsObject:@"path"] && _internalScrollView && _originalScrollDelegate) {
-                _internalScrollView.delegate = _originalScrollDelegate;
+            if ([changedProps containsObject:@"path"] && _internalScrollView) {
+                if (_originalScrollDelegate) {
+                    _internalScrollView.delegate = _originalScrollDelegate;
+                } else {
+                    _internalScrollView.delegate = nil;
+                }
                 _internalScrollView = nil;
                 _originalScrollDelegate = nil;
+                _scrollDelegateProxy = nil;
             }
             
             // Use dispatch_async to ensure view hierarchy is fully set up after document load
@@ -1021,16 +1079,20 @@ using namespace facebook::react;
         scrollView.alwaysBounceHorizontal = NO;
         // Keep vertical bounce enabled for natural scrolling feel
         scrollView.bounces = YES;
-        
-        // Set delegate for scroll tracking (only once to avoid conflicts)
-        // Store original delegate before replacing it to preserve PDFView's internal scrolling
+
+        // IMPORTANT: PDFKit relies on the scrollView delegate for pinch-zoom (viewForZoomingInScrollView).
+        // Install a proxy delegate that forwards to the original delegate, while still letting us observe scroll events.
         if (!_internalScrollView) {
             _internalScrollView = scrollView;
-            // Store original delegate if it exists and is not us
             if (scrollView.delegate && scrollView.delegate != self) {
                 _originalScrollDelegate = scrollView.delegate;
             }
-            scrollView.delegate = self;
+            if (_originalScrollDelegate) {
+                _scrollDelegateProxy = [[RNPDFScrollViewDelegateProxy alloc] initWithPrimary:_originalScrollDelegate secondary:(id<UIScrollViewDelegate>)self];
+                scrollView.delegate = (id<UIScrollViewDelegate>)_scrollDelegateProxy;
+            } else {
+                scrollView.delegate = self;
+            }
         }
     }
     
@@ -1042,11 +1104,7 @@ using namespace facebook::react;
 #pragma mark - UIScrollViewDelegate
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    // Forward to original delegate first if it exists (important for PDFView's scrolling)
-    if (_originalScrollDelegate && [_originalScrollDelegate respondsToSelector:@selector(scrollViewDidScroll:)]) {
-        [_originalScrollDelegate scrollViewDidScroll:scrollView];
-    }
-    
+
     if (!_pdfDocument || _singlePage) {
         return;
     }
