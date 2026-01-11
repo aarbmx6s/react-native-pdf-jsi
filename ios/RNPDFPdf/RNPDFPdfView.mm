@@ -149,6 +149,15 @@ const float MIN_SCALE = 1.0f;
     NSMutableDictionary *_searchCache;
     NSString *_currentPdfId;
     NSOperationQueue *_preloadQueue;
+    
+    // Page navigation state tracking
+    int _previousPage;
+    BOOL _isNavigating;
+    BOOL _documentLoaded;
+    
+    // Track usePageViewController state to prevent unnecessary reconfiguration
+    BOOL _currentUsePageViewController;
+    BOOL _usePageViewControllerStateInitialized;
 }
 
 #ifdef RCT_NEW_ARCH_ENABLED
@@ -233,6 +242,7 @@ using namespace facebook::react;
         [updatedPropNames addObject:@"maxScale"];
     }
     if (_horizontal != newProps.horizontal) {
+        RCTLogInfo(@"🔄 [iOS Scroll] Horizontal prop changed: %d -> %d", _horizontal, newProps.horizontal);
         _horizontal = newProps.horizontal;
         [updatedPropNames addObject:@"horizontal"];
     }
@@ -265,6 +275,7 @@ using namespace facebook::react;
         [updatedPropNames addObject:@"password"];
     }
     if (_singlePage != newProps.singlePage) {
+        RCTLogInfo(@"🔄 [iOS Scroll] SinglePage prop changed: %d -> %d", _singlePage, newProps.singlePage);
         _singlePage = newProps.singlePage;
         [updatedPropNames addObject:@"singlePage"];
     }
@@ -326,6 +337,15 @@ using namespace facebook::react;
     _initialed = YES;
 
     [self didSetProps:mProps];
+    
+    // Configure scroll view after layout to ensure it's found
+    // This is important because PDFKit creates the scroll view lazily
+    if (_documentLoaded && _pdfDocument) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            RCTLogInfo(@"🔍 [iOS Scroll] updateLayoutMetrics called, configuring scroll view after layout");
+            [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
+        });
+    }
 }
 
 - (void)handleCommand:(const NSString *)commandName args:(const NSArray *)args
@@ -369,6 +389,38 @@ using namespace facebook::react;
     _showsHorizontalScrollIndicator = YES;
     _showsVerticalScrollIndicator = YES;
     _scrollEnabled = YES;
+    
+    // Initialize page navigation state
+    _previousPage = -1;
+    _isNavigating = NO;
+    _documentLoaded = NO;
+    
+    // Initialize usePageViewController state tracking
+    _currentUsePageViewController = NO;
+    _usePageViewControllerStateInitialized = NO;
+    
+    // #region agent log
+    {
+        NSString *logPath0 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+        NSDictionary *logEntry0 = @{
+            @"sessionId": @"debug-session",
+            @"runId": @"init",
+            @"hypothesisId": @"F",
+            @"location": @"RNPDFPdfView.mm:393",
+            @"message": @"initCommonProps completed",
+            @"data": @{
+                @"horizontal": @(_horizontal),
+                @"enablePaging": @(_enablePaging),
+                @"scrollEnabled": @(_scrollEnabled),
+                @"singlePage": @(_singlePage)
+            },
+            @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+        };
+        NSData *logData0 = [NSJSONSerialization dataWithJSONObject:logEntry0 options:0 error:nil];
+        NSString *logLine0 = [[NSString alloc] initWithData:logData0 encoding:NSUTF8StringEncoding];
+        [[logLine0 stringByAppendingString:@"\n"] writeToFile:logPath0 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    }
+    // #endregion
 
     // Enhanced properties
     _enableCaching = YES;
@@ -440,13 +492,63 @@ using namespace facebook::react;
         _changedProps = changedProps;
 
     } else {
+        // Log all didSetProps calls to understand what's triggering reconfigurations
+        RCTLogInfo(@"📥 [iOS Scroll] didSetProps called - changedProps=%@, initialized=%d, currentUsePageVC=%d", 
+                  changedProps, _usePageViewControllerStateInitialized, _currentUsePageViewController);
+
+        // Create filtered changedProps array - remove "path" if it hasn't actually changed
+        // This prevents unnecessary reconfigurations when path is in changedProps but value unchanged
+        NSArray<NSString *> *effectiveChangedProps = changedProps;
+        BOOL pathActuallyChanged = NO;
 
         if ([changedProps containsObject:@"path"]) {
+            // CRITICAL FIX: Only reset state if the path actually changed
+            // React Native sometimes includes path in changedProps even when only page changes
+            
+            if (_pdfDocument != Nil && _pdfDocument.documentURL != nil) {
+                // Compare new path with existing document's path
+                NSString *currentPath = _pdfDocument.documentURL.path;
+                NSString *newPath = _path;
+                // Normalize paths for comparison (remove trailing slashes, resolve symlinks, etc.)
+                if (![currentPath isEqualToString:newPath]) {
+                    pathActuallyChanged = YES;
+                }
+            } else {
+                // No existing document, so this is a new path (or initial load)
+                pathActuallyChanged = YES;
+            }
+            
+            RCTLogInfo(@"🔄 [iOS Scroll] Path prop in changedProps - hadDocument=%d, pathActuallyChanged=%d", 
+                      (_pdfDocument != Nil), pathActuallyChanged);
+            
+            // Filter out "path" from effectiveChangedProps if it hasn't actually changed
+            if (!pathActuallyChanged) {
+                RCTLogInfo(@"⏭️ [iOS Scroll] Path value unchanged, filtering out 'path' from effectiveChangedProps");
+                NSMutableArray<NSString *> *filtered = [changedProps mutableCopy];
+                [filtered removeObject:@"path"];
+                effectiveChangedProps = filtered;
+            } else {
+                // Path actually changed, use changedProps as-is
+                effectiveChangedProps = changedProps;
+            }
+            
+            if (!pathActuallyChanged) {
+                RCTLogInfo(@"⏭️ [iOS Scroll] Path value unchanged, skipping document reload");
+                // Skip the rest of path handling
+            } else {
+                // Reset document load state when path actually changes
+                _documentLoaded = NO;
+                _previousPage = -1;
+                _isNavigating = NO;
 
-
+                // Release old doc if it exists
             if (_pdfDocument != Nil) {
-                //Release old doc
                 _pdfDocument = Nil;
+                    _usePageViewControllerStateInitialized = NO;
+                    _currentUsePageViewController = NO;
+                    RCTLogInfo(@"🔄 [iOS Scroll] Reset usePageViewController state - path changed (hadDocument=YES)");
+                } else {
+                    RCTLogInfo(@"⏭️ [iOS Scroll] No previous document to reset");
             }
             
             if ([_path hasPrefix:@"blob:"]) {
@@ -482,16 +584,31 @@ using namespace facebook::react;
                 }
 
                 _pdfView.document = _pdfDocument;
+                _documentLoaded = YES;
+                
+                // Configure scroll view after document is set
+                // PDFKit creates the scroll view lazily, so we need to wait a bit
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    RCTLogInfo(@"🔍 [iOS Scroll] Document set, searching for scroll view");
+                    [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
+                    
+                    // Retry after a short delay to catch cases where scroll view is created asynchronously
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        RCTLogInfo(@"🔍 [iOS Scroll] Retry search for scroll view after delay");
+                        [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
+                    });
+                });
             } else {
 
                 [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"error|Load pdf failed. path=%s",_path.UTF8String]]];
 
                 _pdfDocument = Nil;
                 return;
+                }
             }
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"spacing"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"spacing"])) {
             if (_horizontal) {
                 _pdfView.pageBreakMargins = UIEdgeInsetsMake(0,_spacing,0,0);
                 if (_spacing==0) {
@@ -517,11 +634,11 @@ using namespace facebook::react;
             }
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enableRTL"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"enableRTL"])) {
             _pdfView.displaysRTL = _enableRTL;
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enableAnnotationRendering"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"enableAnnotationRendering"])) {
             if (!_enableAnnotationRendering) {
                 for (unsigned long i=0; i<_pdfView.document.pageCount; i++) {
                     PDFPage *pdfPage = [_pdfView.document pageAtIndex:i];
@@ -532,7 +649,7 @@ using namespace facebook::react;
             }
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"fitPolicy"] || [changedProps containsObject:@"minScale"] || [changedProps containsObject:@"maxScale"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"fitPolicy"] || [changedProps containsObject:@"minScale"] || [changedProps containsObject:@"maxScale"])) {
 
             PDFPage *pdfPage = _pdfView.currentPage ? _pdfView.currentPage : [_pdfDocument pageAtIndex:_pdfDocument.pageCount-1];
             CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
@@ -570,49 +687,94 @@ using namespace facebook::react;
 
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"scale"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"scale"])) {
             _pdfView.scaleFactor = _scale * _fixScaleFactor;
             if (_pdfView.scaleFactor>_pdfView.maxScaleFactor) _pdfView.scaleFactor = _pdfView.maxScaleFactor;
             if (_pdfView.scaleFactor<_pdfView.minScaleFactor) _pdfView.scaleFactor = _pdfView.minScaleFactor;
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"horizontal"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"horizontal"])) {
             if (_horizontal) {
                 _pdfView.displayDirection = kPDFDisplayDirectionHorizontal;
                 _pdfView.pageBreakMargins = UIEdgeInsetsMake(0,_spacing,0,0);
+                RCTLogInfo(@"➡️ [iOS Scroll] Set display direction to HORIZONTAL (spacing=%d)", _spacing);
             } else {
                 _pdfView.displayDirection = kPDFDisplayDirectionVertical;
                 _pdfView.pageBreakMargins = UIEdgeInsetsMake(0,0,_spacing,0);
+                RCTLogInfo(@"⬇️ [iOS Scroll] Set display direction to VERTICAL (spacing=%d)", _spacing);
             }
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enablePaging"])) {
-            if (_enablePaging) {
+        // CRITICAL FIX: Only configure usePageViewController when path changes (document loading)
+        // This prevents unnecessary reconfigurations during scrolling and layout updates
+        // Once configured, usePageViewController doesn't need to be reconfigured unless the document changes
+        if (_pdfDocument && [effectiveChangedProps containsObject:@"path"]) {
+            // Fix: Disable usePageViewController when horizontal is true, as it conflicts with horizontal scrolling
+            // UIPageViewController doesn't work well with horizontal PDFView display direction
+            BOOL shouldUsePageViewController = _enablePaging && !_horizontal;
+            
+            RCTLogInfo(@"🔄 [iOS Scroll] Configuring usePageViewController on document load - enablePaging=%d, horizontal=%d, usePageVC=%d", 
+                      _enablePaging, _horizontal, shouldUsePageViewController);
+            
+            // Set state immediately
+            _currentUsePageViewController = shouldUsePageViewController;
+            _usePageViewControllerStateInitialized = YES;
+            
+            // Configure usePageViewController - this only happens on document load
+            if (shouldUsePageViewController) {
+                // Only use page view controller for vertical orientation
                 [_pdfView usePageViewController:YES withViewOptions:@{UIPageViewControllerOptionSpineLocationKey:@(UIPageViewControllerSpineLocationMin),UIPageViewControllerOptionInterPageSpacingKey:@(_spacing)}];
+                RCTLogInfo(@"✅ [iOS Scroll] Enabled UIPageViewController (vertical paging mode)");
             } else {
+                // For horizontal or when paging is disabled, use regular scrolling
                 [_pdfView usePageViewController:NO withViewOptions:Nil];
+                RCTLogInfo(@"✅ [iOS Scroll] Disabled UIPageViewController (using regular scrolling)");
             }
+            
+            // Reconfigure scroll view after usePageViewController changes
+            // PDFView's internal scroll view hierarchy changes when usePageViewController is toggled
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // Reset scroll view references to allow reconfiguration
+                RCTLogInfo(@"🔄 [iOS Scroll] Resetting scroll view references for reconfiguration");
+                self->_internalScrollView = nil;
+                self->_originalScrollDelegate = nil;
+                self->_scrollDelegateProxy = nil;
+                
+                // Reconfigure scroll view after view hierarchy updates
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    RCTLogInfo(@"🔧 [iOS Scroll] Reconfiguring scroll view after usePageViewController change (scrollEnabled=%d)", self->_scrollEnabled);
+                    [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
+                });
+            });
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"singlePage"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"singlePage"])) {
             if (_singlePage) {
                 _pdfView.displayMode = kPDFDisplaySinglePage;
                 _pdfView.userInteractionEnabled = NO;
+                RCTLogInfo(@"📄 [iOS Scroll] Set to SINGLE PAGE mode (userInteractionEnabled=NO)");
             } else {
                 _pdfView.displayMode = kPDFDisplaySinglePageContinuous;
                 _pdfView.userInteractionEnabled = YES;
+                RCTLogInfo(@"📄 [iOS Scroll] Set to CONTINUOUS PAGE mode (userInteractionEnabled=YES)");
             }
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"showsHorizontalScrollIndicator"] || [changedProps containsObject:@"showsVerticalScrollIndicator"])) {
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"showsHorizontalScrollIndicator"] || [changedProps containsObject:@"showsVerticalScrollIndicator"])) {
             [self setScrollIndicators:self horizontal:_showsHorizontalScrollIndicator vertical:_showsVerticalScrollIndicator depth:0];
         }
 
         // Configure scroll view (scrollEnabled)
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || 
+        if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || 
                              [changedProps containsObject:@"scrollEnabled"])) {
+            RCTLogInfo(@"🔧 [iOS Scroll] Configuring scroll enabled=%d (path changed=%d, scrollEnabled changed=%d)", 
+                      _scrollEnabled, 
+                      [effectiveChangedProps containsObject:@"path"], 
+                      [changedProps containsObject:@"scrollEnabled"]);
+            
             // If path changed, restore original delegate before reconfiguring
-            if ([changedProps containsObject:@"path"] && _internalScrollView) {
+            if ([effectiveChangedProps containsObject:@"path"] && _internalScrollView) {
+                RCTLogInfo(@"🔄 [iOS Scroll] Restoring original scroll delegate (path changed)");
                 if (_originalScrollDelegate) {
                     _internalScrollView.delegate = _originalScrollDelegate;
                 } else {
@@ -626,34 +788,181 @@ using namespace facebook::react;
             // Use dispatch_async to ensure view hierarchy is fully set up after document load
             dispatch_async(dispatch_get_main_queue(), ^{
                 // Search within _pdfView's hierarchy for scroll views
+                RCTLogInfo(@"🔍 [iOS Scroll] Starting scroll view search in PDFView hierarchy");
                 [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
             });
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enablePaging"] || [changedProps containsObject:@"horizontal"] || [changedProps containsObject:@"page"])) {
-
+        // Separate page navigation logic - only navigate when page prop actually changes
+        // Skip navigation on initial load (when path changes) to avoid conflicts
+        BOOL shouldNavigateToPage = _documentLoaded && 
+                                     [changedProps containsObject:@"page"] && 
+                                     !_isNavigating &&
+                                     _page != _previousPage &&
+                                     _page > 0 &&
+                                     _page <= (int)_pdfDocument.pageCount;
+        
+        // #region agent log
+        if ([changedProps containsObject:@"page"]) {
+            NSString *logPath14 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+            NSDictionary *logEntry14 = @{
+                @"sessionId": @"debug-session",
+                @"runId": @"init",
+                @"hypothesisId": @"A,C,D",
+                @"location": @"RNPDFPdfView.mm:803",
+                @"message": @"updateProps: page prop changed - checking shouldNavigateToPage",
+                @"data": @{
+                    @"_page": @(_page),
+                    @"_previousPage": @(_previousPage),
+                    @"documentLoaded": @(_documentLoaded),
+                    @"isNavigating": @(_isNavigating),
+                    @"shouldNavigateToPage": @(shouldNavigateToPage),
+                    @"contentOffsetBeforeNav": _internalScrollView ? @{@"x": @(_internalScrollView.contentOffset.x), @"y": @(_internalScrollView.contentOffset.y)} : @"noScrollView"
+                },
+                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+            };
+            NSData *logData14 = [NSJSONSerialization dataWithJSONObject:logEntry14 options:0 error:nil];
+            NSString *logLine14 = [[NSString alloc] initWithData:logData14 encoding:NSUTF8StringEncoding];
+            NSFileHandle *fileHandle14 = [NSFileHandle fileHandleForWritingAtPath:logPath14];
+            if (fileHandle14) {
+                [fileHandle14 seekToEndOfFile];
+                [fileHandle14 writeData:[[logLine14 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                [fileHandle14 closeFile];
+            } else {
+                [[logLine14 stringByAppendingString:@"\n"] writeToFile:logPath14 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        }
+        // #endregion
+        
+        if (shouldNavigateToPage) {
+            _isNavigating = YES;
+            PDFPage *pdfPage = [_pdfDocument pageAtIndex:_page-1];
+            
+            if (pdfPage) {
+                // Use smooth navigation instead of instant jump to prevent full rerender
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    // #region agent log
+                    CGPoint contentOffsetBefore = self->_internalScrollView ? self->_internalScrollView.contentOffset : CGPointMake(0, 0);
+                    NSString *logPath15 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+                    NSDictionary *logEntry15 = @{
+                        @"sessionId": @"debug-session",
+                        @"runId": @"init",
+                        @"hypothesisId": @"B,C",
+                        @"location": @"RNPDFPdfView.mm:812",
+                        @"message": @"goToDestination: BEFORE navigation call",
+                        @"data": @{
+                            @"targetPage": @(self->_page),
+                            @"enablePaging": @(self->_enablePaging),
+                            @"contentOffsetBefore": @{@"x": @(contentOffsetBefore.x), @"y": @(contentOffsetBefore.y)},
+                            @"isNavigating": @(self->_isNavigating)
+                        },
+                        @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+                    };
+                    NSData *logData15 = [NSJSONSerialization dataWithJSONObject:logEntry15 options:0 error:nil];
+                    NSString *logLine15 = [[NSString alloc] initWithData:logData15 encoding:NSUTF8StringEncoding];
+                    NSFileHandle *fileHandle15 = [NSFileHandle fileHandleForWritingAtPath:logPath15];
+                    if (fileHandle15) {
+                        [fileHandle15 seekToEndOfFile];
+                        [fileHandle15 writeData:[[logLine15 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                        [fileHandle15 closeFile];
+                    } else {
+                        [[logLine15 stringByAppendingString:@"\n"] writeToFile:logPath15 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                    }
+                    // #endregion
+                    
+                    if (!self->_enablePaging) {
+                        // For non-paging mode, use animated navigation
+                        CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
+                        
+                        // Handle page rotation
+                        if (pdfPage.rotation == 90 || pdfPage.rotation == 270) {
+                            pdfPageRect = CGRectMake(0, 0, pdfPageRect.size.height, pdfPageRect.size.width);
+                        }
+                        
+                        CGPoint pointLeftTop = CGPointMake(0, pdfPageRect.size.height);
+                        PDFDestination *pdfDest = [[PDFDestination alloc] initWithPage:pdfPage atPoint:pointLeftTop];
+                        
+                        // Use goToDestination for smooth navigation
+                        [self->_pdfView goToDestination:pdfDest];
+                        self->_pdfView.scaleFactor = self->_fixScaleFactor * self->_scale;
+                    } else {
+                        // For paging mode, use goToRect for better page alignment
+                        if (self->_page == 1) {
+                            // Special case for first page
+                            [self->_pdfView goToRect:CGRectMake(0, NSUIntegerMax, 1, 1) onPage:pdfPage];
+                        } else {
+                            CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
+                            if (pdfPage.rotation == 90 || pdfPage.rotation == 270) {
+                                pdfPageRect = CGRectMake(0, 0, pdfPageRect.size.height, pdfPageRect.size.width);
+                            }
+                            CGPoint pointLeftTop = CGPointMake(0, pdfPageRect.size.height);
+                            PDFDestination *pdfDest = [[PDFDestination alloc] initWithPage:pdfPage atPoint:pointLeftTop];
+                            [self->_pdfView goToDestination:pdfDest];
+                            self->_pdfView.scaleFactor = self->_fixScaleFactor * self->_scale;
+                        }
+                    }
+                    
+                    self->_previousPage = self->_page;
+                    self->_isNavigating = NO;
+                    
+                    // #region agent log
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        CGPoint contentOffsetAfter = self->_internalScrollView ? self->_internalScrollView.contentOffset : CGPointMake(0, 0);
+                        NSString *logPath16 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+                        NSDictionary *logEntry16 = @{
+                            @"sessionId": @"debug-session",
+                            @"runId": @"init",
+                            @"hypothesisId": @"B,C",
+                            @"location": @"RNPDFPdfView.mm:845",
+                            @"message": @"goToDestination: AFTER navigation call (100ms delay)",
+                            @"data": @{
+                                @"targetPage": @(self->_page),
+                                @"previousPage": @(self->_previousPage),
+                                @"contentOffsetBefore": @{@"x": @(contentOffsetBefore.x), @"y": @(contentOffsetBefore.y)},
+                                @"contentOffsetAfter": @{@"x": @(contentOffsetAfter.x), @"y": @(contentOffsetAfter.y)},
+                                @"offsetChanged": @(fabs(contentOffsetBefore.x - contentOffsetAfter.x) > 1 || fabs(contentOffsetBefore.y - contentOffsetAfter.y) > 1)
+                            },
+                            @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+                        };
+                        NSData *logData16 = [NSJSONSerialization dataWithJSONObject:logEntry16 options:0 error:nil];
+                        NSString *logLine16 = [[NSString alloc] initWithData:logData16 encoding:NSUTF8StringEncoding];
+                        NSFileHandle *fileHandle16 = [NSFileHandle fileHandleForWritingAtPath:logPath16];
+                        if (fileHandle16) {
+                            [fileHandle16 seekToEndOfFile];
+                            [fileHandle16 writeData:[[logLine16 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                            [fileHandle16 closeFile];
+                        } else {
+                            [[logLine16 stringByAppendingString:@"\n"] writeToFile:logPath16 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                        }
+                    });
+                    // #endregion
+                });
+            } else {
+                _isNavigating = NO;
+            }
+        }
+        
+        // Handle initial page on document load (only when path changes)
+        // This handles the case where the document was just loaded and we need to navigate to the initial page
+        // Use pathActuallyChanged instead of checking changedProps to ensure we only handle initial page when path actually changed
+        if (_pdfDocument && pathActuallyChanged && _documentLoaded) {
             PDFPage *pdfPage = [_pdfDocument pageAtIndex:_page-1];
             if (pdfPage && _page == 1) {
-                // goToDestination() would be better. However, there is an
-                // error in the pointLeftTop computation that often results in
-                // scrolling to the middle of the page.
-                // Special case workaround to make starting at the first page
-                // align acceptably.
+                // Special case workaround for first page alignment
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self->_pdfView goToRect:CGRectMake(0, NSUIntegerMax, 1, 1) onPage:pdfPage];
+                    self->_previousPage = self->_page;
                 });
             } else if (pdfPage) {
                 CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
-
-                // some pdf with rotation, then adjust it
                 if (pdfPage.rotation == 90 || pdfPage.rotation == 270) {
                     pdfPageRect = CGRectMake(0, 0, pdfPageRect.size.height, pdfPageRect.size.width);
                 }
-
                 CGPoint pointLeftTop = CGPointMake(0, pdfPageRect.size.height);
                 PDFDestination *pdfDest = [[PDFDestination alloc] initWithPage:pdfPage atPoint:pointLeftTop];
                 [_pdfView goToDestination:pdfDest];
                 _pdfView.scaleFactor = _fixScaleFactor*_scale;
+                _previousPage = _page;
             }
         }
 
@@ -676,6 +985,15 @@ using namespace facebook::react;
     _initialed = YES;
 
     [self didSetProps:mProps];
+    
+    // Configure scroll view after layout to ensure it's found
+    // This is important because PDFKit creates the scroll view lazily
+    if (_documentLoaded && _pdfDocument) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            RCTLogInfo(@"🔍 [iOS Scroll] reactSetFrame called, configuring scroll view after layout");
+            [self configureScrollView:self->_pdfView enabled:self->_scrollEnabled depth:0];
+        });
+    }
 }
 
 
@@ -849,7 +1167,21 @@ using namespace facebook::react;
         unsigned long numberOfPages = _pdfDocument.pageCount;
 
         // Update current page for preloading
-        _page = (int)page + 1;
+        int newPage = (int)page + 1;
+        
+        // CRITICAL FIX: Update _previousPage to the new page value when page changes from PDFView notifications
+        // This prevents updateProps from triggering programmatic navigation when React Native
+        // receives the pageChanged notification and updates the page prop back to us.
+        // By setting _previousPage = newPage, when updateProps checks _page != _previousPage,
+        // they will be equal (since the page prop will match the new page), and navigation will be skipped.
+        if (newPage != _page) {
+            _previousPage = newPage;  // Set to newPage to prevent navigation loop
+            _page = newPage;
+        } else {
+            // If page didn't actually change, just ensure _previousPage matches to prevent navigation
+            _previousPage = _page;
+        }
+        
         _pageCount = (int)numberOfPages;
         if (_enablePreloading) {
             [self preloadAdjacentPages:_page];
@@ -1064,48 +1396,253 @@ using namespace facebook::react;
 }
 
 - (void)configureScrollView:(UIView *)view enabled:(BOOL)enabled depth:(int)depth {
+    // Log entry to track all calls
+    if (depth == 0) {
+        RCTLogInfo(@"🚀 [iOS Scroll] configureScrollView called - enabled=%d, view=%@", enabled, NSStringFromClass([view class]));
+    }
+    
     // max depth, prevent infinite loop
     if (depth > 10) {
+        RCTLogWarn(@"⚠️ [iOS Scroll] Max depth reached in configureScrollView (depth=%d)", depth);
         return;
     }
     
     if ([view isKindOfClass:[UIScrollView class]]) {
         UIScrollView *scrollView = (UIScrollView *)view;
+        RCTLogInfo(@"📱 [iOS Scroll] Found UIScrollView at depth=%d, frame=%@, contentSize=%@, enabled=%d", 
+                  depth, 
+                  NSStringFromCGRect(scrollView.frame),
+                  NSStringFromCGSize(scrollView.contentSize),
+                  enabled);
+        
+        // #region agent log
+        {
+            NSString *logPath1 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+            NSDictionary *logEntry1 = @{
+                @"sessionId": @"debug-session",
+                @"runId": @"init",
+                @"hypothesisId": @"D,F",
+                @"location": @"RNPDFPdfView.mm:1307",
+                @"message": @"Found UIScrollView in hierarchy",
+                @"data": @{
+                    @"depth": @(depth),
+                    @"contentSize": @{@"width": @(scrollView.contentSize.width), @"height": @(scrollView.contentSize.height)},
+                    @"frame": @{@"x": @(scrollView.frame.origin.x), @"y": @(scrollView.frame.origin.y), @"width": @(scrollView.frame.size.width), @"height": @(scrollView.frame.size.height)},
+                    @"scrollEnabled": @(scrollView.scrollEnabled),
+                    @"alwaysBounceHorizontal": @(scrollView.alwaysBounceHorizontal),
+                    @"userInteractionEnabled": @(scrollView.userInteractionEnabled),
+                    @"horizontal": @(_horizontal),
+                    @"enablePaging": @(_enablePaging)
+                },
+                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+            };
+            NSData *logData1 = [NSJSONSerialization dataWithJSONObject:logEntry1 options:0 error:nil];
+            NSString *logLine1 = [[NSString alloc] initWithData:logData1 encoding:NSUTF8StringEncoding];
+            NSFileHandle *fileHandle1 = [NSFileHandle fileHandleForWritingAtPath:logPath1];
+            if (fileHandle1) {
+                [fileHandle1 seekToEndOfFile];
+                [fileHandle1 writeData:[[logLine1 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                [fileHandle1 closeFile];
+            } else {
+                [[logLine1 stringByAppendingString:@"\n"] writeToFile:logPath1 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        }
+        // #endregion
+        
         // Since we're starting the recursion from _pdfView, all scroll views found are within its hierarchy
         // Configure scroll properties
+        BOOL previousScrollEnabled = scrollView.scrollEnabled;
         scrollView.scrollEnabled = enabled;
         
-        // Disable horizontal bouncing to prevent interference with navigation swipe-back
+        if (previousScrollEnabled != enabled) {
+            RCTLogInfo(@"🔄 [iOS Scroll] Changed scrollEnabled: %d -> %d", previousScrollEnabled, enabled);
+        }
+        
+        // Conditionally set horizontal bouncing based on scroll direction
+        // Allow horizontal bounce when horizontal scrolling is enabled
+        BOOL previousAlwaysBounceHorizontal = scrollView.alwaysBounceHorizontal;
+        if (_horizontal) {
+            scrollView.alwaysBounceHorizontal = YES;
+        } else {
+            // Disable horizontal bouncing for vertical scrolling to prevent interference with navigation swipe-back
         scrollView.alwaysBounceHorizontal = NO;
+        }
+        
+        if (previousAlwaysBounceHorizontal != scrollView.alwaysBounceHorizontal) {
+            RCTLogInfo(@"🔄 [iOS Scroll] Changed alwaysBounceHorizontal: %d -> %d (horizontal=%d)", 
+                      previousAlwaysBounceHorizontal, 
+                      scrollView.alwaysBounceHorizontal,
+                      _horizontal);
+        }
+        
         // Keep vertical bounce enabled for natural scrolling feel
         scrollView.bounces = YES;
+        
+        RCTLogInfo(@"📊 [iOS Scroll] ScrollView config - scrollEnabled=%d, alwaysBounceHorizontal=%d, bounces=%d, delegate=%@", 
+                  scrollView.scrollEnabled,
+                  scrollView.alwaysBounceHorizontal,
+                  scrollView.bounces,
+                  scrollView.delegate != nil ? @"set" : @"nil");
+        
+        // #region agent log
+        {
+            NSString *logPath3 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+            NSDictionary *logEntry3 = @{
+                @"sessionId": @"debug-session",
+                @"runId": @"init",
+                @"hypothesisId": @"A,B,C,D,E",
+                @"location": @"RNPDFPdfView.mm:1374",
+                @"message": @"ScrollView configuration completed",
+                @"data": @{
+                    @"scrollEnabled": @(scrollView.scrollEnabled),
+                    @"alwaysBounceHorizontal": @(scrollView.alwaysBounceHorizontal),
+                    @"bounces": @(scrollView.bounces),
+                    @"contentSize": @{@"width": @(scrollView.contentSize.width), @"height": @(scrollView.contentSize.height)},
+                    @"userInteractionEnabled": @(scrollView.userInteractionEnabled),
+                    @"delegate": scrollView.delegate != nil ? @"set" : @"nil",
+                    @"horizontal": @(_horizontal),
+                    @"enablePaging": @(_enablePaging)
+                },
+                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+            };
+            NSData *logData3 = [NSJSONSerialization dataWithJSONObject:logEntry3 options:0 error:nil];
+            NSString *logLine3 = [[NSString alloc] initWithData:logData3 encoding:NSUTF8StringEncoding];
+            NSFileHandle *fileHandle3 = [NSFileHandle fileHandleForWritingAtPath:logPath3];
+            if (fileHandle3) {
+                [fileHandle3 seekToEndOfFile];
+                [fileHandle3 writeData:[[logLine3 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                [fileHandle3 closeFile];
+            } else {
+                [[logLine3 stringByAppendingString:@"\n"] writeToFile:logPath3 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        }
+        // #endregion
 
         // IMPORTANT: PDFKit relies on the scrollView delegate for pinch-zoom (viewForZoomingInScrollView).
         // Install a proxy delegate that forwards to the original delegate, while still letting us observe scroll events.
         if (!_internalScrollView) {
+            RCTLogInfo(@"✅ [iOS Scroll] Setting internal scroll view reference");
             _internalScrollView = scrollView;
             if (scrollView.delegate && scrollView.delegate != self) {
                 _originalScrollDelegate = scrollView.delegate;
+                RCTLogInfo(@"📝 [iOS Scroll] Stored original scroll delegate");
             }
             if (_originalScrollDelegate) {
                 _scrollDelegateProxy = [[RNPDFScrollViewDelegateProxy alloc] initWithPrimary:_originalScrollDelegate secondary:(id<UIScrollViewDelegate>)self];
                 scrollView.delegate = (id<UIScrollViewDelegate>)_scrollDelegateProxy;
+                RCTLogInfo(@"🔗 [iOS Scroll] Installed scroll delegate proxy");
             } else {
                 scrollView.delegate = self;
+                RCTLogInfo(@"🔗 [iOS Scroll] Set self as scroll delegate");
             }
+        } else {
+            RCTLogInfo(@"⚠️ [iOS Scroll] Internal scroll view already set, skipping delegate setup");
         }
     }
     
     for (UIView *subview in view.subviews) {
         [self configureScrollView:subview enabled:enabled depth:depth + 1];
     }
+    
+    // Log at root level if no scroll view was found
+    if (depth == 0 && !_internalScrollView) {
+        RCTLogWarn(@"⚠️ [iOS Scroll] No UIScrollView found in view hierarchy (view=%@, subviewCount=%lu)", 
+                  NSStringFromClass([view class]), 
+                  (unsigned long)[view.subviews count]);
+        
+        // #region agent log
+        {
+            NSString *logPath6 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+            NSMutableArray *subviewClasses = [NSMutableArray array];
+            for (UIView *subview in view.subviews) {
+                [subviewClasses addObject:NSStringFromClass([subview class])];
+            }
+            NSDictionary *logEntry6 = @{
+                @"sessionId": @"debug-session",
+                @"runId": @"init",
+                @"hypothesisId": @"F",
+                @"location": @"RNPDFPdfView.mm:1446",
+                @"message": @"No UIScrollView found in hierarchy",
+                @"data": @{
+                    @"viewClass": NSStringFromClass([view class]),
+                    @"subviewCount": @([view.subviews count]),
+                    @"subviewClasses": subviewClasses,
+                    @"horizontal": @(_horizontal),
+                    @"enablePaging": @(_enablePaging)
+                },
+                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+            };
+            NSData *logData6 = [NSJSONSerialization dataWithJSONObject:logEntry6 options:0 error:nil];
+            NSString *logLine6 = [[NSString alloc] initWithData:logData6 encoding:NSUTF8StringEncoding];
+            NSFileHandle *fileHandle6 = [NSFileHandle fileHandleForWritingAtPath:logPath6];
+            if (fileHandle6) {
+                [fileHandle6 seekToEndOfFile];
+                [fileHandle6 writeData:[[logLine6 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                [fileHandle6 closeFile];
+            } else {
+                [[logLine6 stringByAppendingString:@"\n"] writeToFile:logPath6 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        }
+        // #endregion
+    }
 }
 
 #pragma mark - UIScrollViewDelegate
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    static int scrollEventCount = 0;
+    scrollEventCount++;
+    
+    // Log scroll events periodically (every 10th event to avoid spam)
+    if (scrollEventCount % 10 == 0) {
+        RCTLogInfo(@"📜 [iOS Scroll] scrollViewDidScroll #%d - offset=(%.2f, %.2f), contentSize=(%.2f, %.2f), bounds=(%.2f, %.2f), scrollEnabled=%d", 
+                  scrollEventCount,
+                  scrollView.contentOffset.x,
+                  scrollView.contentOffset.y,
+                  scrollView.contentSize.width,
+                  scrollView.contentSize.height,
+                  scrollView.bounds.size.width,
+                  scrollView.bounds.size.height,
+                  scrollView.scrollEnabled);
+        
+        // #region agent log
+        {
+            NSString *logPath2 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+            NSDictionary *logEntry2 = @{
+                @"sessionId": @"debug-session",
+                @"runId": @"init",
+                @"hypothesisId": @"B",
+                @"location": @"RNPDFPdfView.mm:1300",
+                @"message": @"scrollViewDidScroll called",
+                @"data": @{
+                    @"eventCount": @(scrollEventCount),
+                    @"contentOffset": @{@"x": @(scrollView.contentOffset.x), @"y": @(scrollView.contentOffset.y)},
+                    @"contentSize": @{@"width": @(scrollView.contentSize.width), @"height": @(scrollView.contentSize.height)},
+                    @"bounds": @{@"width": @(scrollView.bounds.size.width), @"height": @(scrollView.bounds.size.height)},
+                    @"scrollEnabled": @(scrollView.scrollEnabled),
+                    @"alwaysBounceHorizontal": @(scrollView.alwaysBounceHorizontal)
+                },
+                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+            };
+            NSData *logData2 = [NSJSONSerialization dataWithJSONObject:logEntry2 options:0 error:nil];
+            NSString *logLine2 = [[NSString alloc] initWithData:logData2 encoding:NSUTF8StringEncoding];
+            NSFileHandle *fileHandle2 = [NSFileHandle fileHandleForWritingAtPath:logPath2];
+            if (fileHandle2) {
+                [fileHandle2 seekToEndOfFile];
+                [fileHandle2 writeData:[[logLine2 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                [fileHandle2 closeFile];
+            } else {
+                [[logLine2 stringByAppendingString:@"\n"] writeToFile:logPath2 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        }
+        // #endregion
+    }
 
     if (!_pdfDocument || _singlePage) {
+        if (scrollEventCount % 10 == 0) {
+            RCTLogInfo(@"⏭️ [iOS Scroll] Skipping scroll handling - pdfDocument=%d, singlePage=%d", 
+                      _pdfDocument != nil, _singlePage);
+        }
         return;
     }
     
@@ -1126,7 +1663,46 @@ using namespace facebook::react;
         
         // Only update if page actually changed and is valid
         if (newPage != _page && newPage > 0 && newPage <= (int)_pdfDocument.pageCount) {
+            RCTLogInfo(@"📄 [iOS Scroll] Page changed: %d -> %d (from scroll position)", _page, newPage);
+            // #region agent log
+            {
+                NSString *logPath12 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+                NSDictionary *logEntry12 = @{
+                    @"sessionId": @"debug-session",
+                    @"runId": @"init",
+                    @"hypothesisId": @"A,C,D",
+                    @"location": @"RNPDFPdfView.mm:1558",
+                    @"message": @"scrollViewDidScroll detected page change - BEFORE updating _page",
+                    @"data": @{
+                        @"oldPage": @(_page),
+                        @"newPage": @(newPage),
+                        @"previousPage": @(_previousPage),
+                        @"contentOffset": @{@"x": @(scrollView.contentOffset.x), @"y": @(scrollView.contentOffset.y)},
+                        @"isNavigating": @(_isNavigating)
+                    },
+                    @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+                };
+                NSData *logData12 = [NSJSONSerialization dataWithJSONObject:logEntry12 options:0 error:nil];
+                NSString *logLine12 = [[NSString alloc] initWithData:logData12 encoding:NSUTF8StringEncoding];
+                NSFileHandle *fileHandle12 = [NSFileHandle fileHandleForWritingAtPath:logPath12];
+                if (fileHandle12) {
+                    [fileHandle12 seekToEndOfFile];
+                    [fileHandle12 writeData:[[logLine12 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                    [fileHandle12 closeFile];
+                } else {
+                    [[logLine12 stringByAppendingString:@"\n"] writeToFile:logPath12 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                }
+            }
+            // #endregion
+            
+            // CRITICAL FIX: Update _previousPage to the new page value when page changes from user scrolling
+            // This prevents updateProps from triggering programmatic navigation when React Native
+            // receives the pageChanged notification and updates the page prop back to us.
+            // By setting _previousPage = newPage, when updateProps checks _page != _previousPage,
+            // they will be equal (since React Native will set _page = newPage), and navigation will be skipped.
+            int oldPage = _page;
             _page = newPage;
+            _previousPage = newPage;  // Set to newPage to prevent navigation loop
             _pageCount = (int)_pdfDocument.pageCount;
             
             // Trigger preloading if enabled
@@ -1136,6 +1712,39 @@ using namespace facebook::react;
             
             // Notify about page change
             [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"pageChanged|%d|%lu", newPage, _pdfDocument.pageCount]]];
+            // #region agent log
+            {
+                NSString *logPath13 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
+                NSDictionary *logEntry13 = @{
+                    @"sessionId": @"debug-session",
+                    @"runId": @"init",
+                    @"hypothesisId": @"A,C,D",
+                    @"location": @"RNPDFPdfView.mm:1570",
+                    @"message": @"scrollViewDidScroll detected page change - AFTER updating _page and _previousPage (to prevent navigation loop)",
+                    @"data": @{
+                        @"_page": @(_page),
+                        @"_previousPage": @(_previousPage),
+                        @"notificationSent": @YES
+                    },
+                    @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
+                };
+                NSData *logData13 = [NSJSONSerialization dataWithJSONObject:logEntry13 options:0 error:nil];
+                NSString *logLine13 = [[NSString alloc] initWithData:logData13 encoding:NSUTF8StringEncoding];
+                NSFileHandle *fileHandle13 = [NSFileHandle fileHandleForWritingAtPath:logPath13];
+                if (fileHandle13) {
+                    [fileHandle13 seekToEndOfFile];
+                    [fileHandle13 writeData:[[logLine13 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+                    [fileHandle13 closeFile];
+                } else {
+                    [[logLine13 stringByAppendingString:@"\n"] writeToFile:logPath13 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                }
+            }
+            // #endregion
+        }
+    } else {
+        if (scrollEventCount % 50 == 0) {
+            RCTLogWarn(@"⚠️ [iOS Scroll] No visible page found for scroll position (%.2f, %.2f)", 
+                      pdfPoint.x, pdfPoint.y);
         }
     }
 }

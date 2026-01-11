@@ -681,6 +681,7 @@ export default class Pdf extends Component {
                                                 {...this.props}
                                                 style={[{backgroundColor: '#EEE',overflow: 'hidden'}, this.props.style]}
                                                 path={this.state.path}
+                                                page={this.props.page}
                                                 onLoadComplete={this.props.onLoadComplete}
                                                 onPageChanged={this.props.onPageChanged}
                                                 onError={this._onError}

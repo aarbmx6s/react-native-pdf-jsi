@@ -83,6 +83,7 @@ export default class PdfView extends Component {
             scale: this.props.scale,
             contentOffset: {x: 0, y: 0},
             newContentOffset: {x: 0, y: 0},
+            previousPage: -1, // Track previous page to prevent unnecessary navigations
         };
 
         this._flatList = null;
@@ -121,10 +122,16 @@ export default class PdfView extends Component {
                 this.props.onError(error);
             });
 
+        // Initialize page navigation after PDF loads
         clearTimeout(this._scrollTimer);
         this._scrollTimer = setTimeout(() => {
-            if (this._flatList) {
-                this._flatList.scrollToIndex({animated: false, index: this.props.page < 1 ? 0 : this.props.page - 1});
+            if (this._flatList && this._mounted) {
+                const initialPage = this.props.page < 1 ? 0 : this.props.page - 1;
+                this._flatList.scrollToIndex({
+                    animated: false, 
+                    index: initialPage
+                });
+                this.setState({ previousPage: this.props.page < 1 ? 1 : this.props.page });
             }
         }, 200);
     }
@@ -139,15 +146,30 @@ export default class PdfView extends Component {
             });
         }
 
-        if (this.props.horizontal !== prevProps.horizontal || this.props.page !== prevProps.page) {
+        // Only navigate if page actually changed and PDF is loaded
+        const pageChanged = this.props.page !== prevProps.page;
+        const horizontalChanged = this.props.horizontal !== prevProps.horizontal;
+        
+        if ((horizontalChanged || pageChanged) && this.state.pdfLoaded && this._flatList) {
             let page = (this.props.page) < 1 ? 1 : this.props.page;
             page = page > this.state.numberOfPages ? this.state.numberOfPages : page;
-
-            if (this._flatList) {
+            
+            // Only navigate if page actually changed from previous navigation
+            if (page !== this.state.previousPage) {
                 clearTimeout(this._scrollTimer);
                 this._scrollTimer = setTimeout(() => {
-                    this._flatList.scrollToIndex({animated: false, index: page - 1});
-                }, 200);
+                    if (this._flatList && this._mounted) {
+                        // Use animated: true for smooth transitions when pagination is disabled
+                        // Use animated: false only when paging is enabled for instant snap
+                        const shouldAnimate = !this.props.enablePaging;
+                        this._flatList.scrollToIndex({
+                            animated: shouldAnimate,
+                            index: page - 1,
+                            viewPosition: 0.5 // Center the page in view
+                        });
+                        this.setState({ previousPage: page });
+                    }
+                }, horizontalChanged ? 300 : 100); // Longer delay if orientation changed
             }
         }
 
@@ -339,7 +361,10 @@ export default class PdfView extends Component {
         let data = [];
 
         if (this.props.singlePage) {
-            data[0] = {key: this.props.currentPage >= 0 ? this.props.currentPage : 0}
+            // Fix: Use page prop instead of currentPage for singlePage mode
+            // This allows the page prop to control which page is displayed
+            const pageToShow = this.props.page >= 1 ? this.props.page - 1 : 0;
+            data[0] = {key: pageToShow};
         } else {
             for (let i = 0; i < this.state.numberOfPages; i++) {
                 data[i] = {key: i};
@@ -362,6 +387,9 @@ export default class PdfView extends Component {
                 windowSize={11}
                 getItemLayout={this._getItemLayout}
                 maxToRenderPerBatch={1}
+                // Prevent full rerenders when page changes - only rerender when data actually changes
+                extraData={this.props.singlePage ? this.props.page : this.state.numberOfPages}
+                removeClippedSubviews={true}
                 renderScrollComponent={(props) => <ScrollView
                     {...props}
                     centerContent={this.state.centerContent}

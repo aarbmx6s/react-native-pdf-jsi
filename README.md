@@ -410,6 +410,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Recent Fixes
 
+### iOS Performance - Unnecessary Path Handlers (v4.2.0)
+Fixed performance issue where path-related handlers were running unnecessarily when the path value hadn't actually changed. The fix filters out "path" from effectiveChangedProps when pathActuallyChanged=NO, preventing unnecessary reconfigurations of spacing, display direction, scroll views, usePageViewController, and other path-dependent handlers. This reduces unnecessary rerenders and improves performance, especially when navigating between pages. Addresses issue #7 (Page Prop Causes Full Rerender).
+
 ### iOS Pinch-to-Zoom (v4.1.1)
 Fixed critical issue where pinch-to-zoom gestures were not working on iOS. The fix removes interfering custom gesture recognizers and enables PDFView's native pinch-to-zoom functionality, which now works smoothly on both iOS and Android.
 
