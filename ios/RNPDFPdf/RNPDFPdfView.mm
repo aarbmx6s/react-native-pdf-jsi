@@ -399,29 +399,6 @@ using namespace facebook::react;
     _currentUsePageViewController = NO;
     _usePageViewControllerStateInitialized = NO;
     
-    // #region agent log
-    {
-        NSString *logPath0 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-        NSDictionary *logEntry0 = @{
-            @"sessionId": @"debug-session",
-            @"runId": @"init",
-            @"hypothesisId": @"F",
-            @"location": @"RNPDFPdfView.mm:393",
-            @"message": @"initCommonProps completed",
-            @"data": @{
-                @"horizontal": @(_horizontal),
-                @"enablePaging": @(_enablePaging),
-                @"scrollEnabled": @(_scrollEnabled),
-                @"singlePage": @(_singlePage)
-            },
-            @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-        };
-        NSData *logData0 = [NSJSONSerialization dataWithJSONObject:logEntry0 options:0 error:nil];
-        NSString *logLine0 = [[NSString alloc] initWithData:logData0 encoding:NSUTF8StringEncoding];
-        [[logLine0 stringByAppendingString:@"\n"] writeToFile:logPath0 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    }
-    // #endregion
-
     // Enhanced properties
     _enableCaching = YES;
     _enablePreloading = YES;
@@ -802,38 +779,6 @@ using namespace facebook::react;
                                      _page > 0 &&
                                      _page <= (int)_pdfDocument.pageCount;
         
-        // #region agent log
-        if ([changedProps containsObject:@"page"]) {
-            NSString *logPath14 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-            NSDictionary *logEntry14 = @{
-                @"sessionId": @"debug-session",
-                @"runId": @"init",
-                @"hypothesisId": @"A,C,D",
-                @"location": @"RNPDFPdfView.mm:803",
-                @"message": @"updateProps: page prop changed - checking shouldNavigateToPage",
-                @"data": @{
-                    @"_page": @(_page),
-                    @"_previousPage": @(_previousPage),
-                    @"documentLoaded": @(_documentLoaded),
-                    @"isNavigating": @(_isNavigating),
-                    @"shouldNavigateToPage": @(shouldNavigateToPage),
-                    @"contentOffsetBeforeNav": _internalScrollView ? @{@"x": @(_internalScrollView.contentOffset.x), @"y": @(_internalScrollView.contentOffset.y)} : @"noScrollView"
-                },
-                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-            };
-            NSData *logData14 = [NSJSONSerialization dataWithJSONObject:logEntry14 options:0 error:nil];
-            NSString *logLine14 = [[NSString alloc] initWithData:logData14 encoding:NSUTF8StringEncoding];
-            NSFileHandle *fileHandle14 = [NSFileHandle fileHandleForWritingAtPath:logPath14];
-            if (fileHandle14) {
-                [fileHandle14 seekToEndOfFile];
-                [fileHandle14 writeData:[[logLine14 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                [fileHandle14 closeFile];
-            } else {
-                [[logLine14 stringByAppendingString:@"\n"] writeToFile:logPath14 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-        }
-        // #endregion
-        
         if (shouldNavigateToPage) {
             _isNavigating = YES;
             PDFPage *pdfPage = [_pdfDocument pageAtIndex:_page-1];
@@ -841,35 +786,6 @@ using namespace facebook::react;
             if (pdfPage) {
                 // Use smooth navigation instead of instant jump to prevent full rerender
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    // #region agent log
-                    CGPoint contentOffsetBefore = self->_internalScrollView ? self->_internalScrollView.contentOffset : CGPointMake(0, 0);
-                    NSString *logPath15 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-                    NSDictionary *logEntry15 = @{
-                        @"sessionId": @"debug-session",
-                        @"runId": @"init",
-                        @"hypothesisId": @"B,C",
-                        @"location": @"RNPDFPdfView.mm:812",
-                        @"message": @"goToDestination: BEFORE navigation call",
-                        @"data": @{
-                            @"targetPage": @(self->_page),
-                            @"enablePaging": @(self->_enablePaging),
-                            @"contentOffsetBefore": @{@"x": @(contentOffsetBefore.x), @"y": @(contentOffsetBefore.y)},
-                            @"isNavigating": @(self->_isNavigating)
-                        },
-                        @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-                    };
-                    NSData *logData15 = [NSJSONSerialization dataWithJSONObject:logEntry15 options:0 error:nil];
-                    NSString *logLine15 = [[NSString alloc] initWithData:logData15 encoding:NSUTF8StringEncoding];
-                    NSFileHandle *fileHandle15 = [NSFileHandle fileHandleForWritingAtPath:logPath15];
-                    if (fileHandle15) {
-                        [fileHandle15 seekToEndOfFile];
-                        [fileHandle15 writeData:[[logLine15 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                        [fileHandle15 closeFile];
-                    } else {
-                        [[logLine15 stringByAppendingString:@"\n"] writeToFile:logPath15 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                    }
-                    // #endregion
-                    
                     if (!self->_enablePaging) {
                         // For non-paging mode, use animated navigation
                         CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
@@ -904,38 +820,6 @@ using namespace facebook::react;
                     
                     self->_previousPage = self->_page;
                     self->_isNavigating = NO;
-                    
-                    // #region agent log
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        CGPoint contentOffsetAfter = self->_internalScrollView ? self->_internalScrollView.contentOffset : CGPointMake(0, 0);
-                        NSString *logPath16 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-                        NSDictionary *logEntry16 = @{
-                            @"sessionId": @"debug-session",
-                            @"runId": @"init",
-                            @"hypothesisId": @"B,C",
-                            @"location": @"RNPDFPdfView.mm:845",
-                            @"message": @"goToDestination: AFTER navigation call (100ms delay)",
-                            @"data": @{
-                                @"targetPage": @(self->_page),
-                                @"previousPage": @(self->_previousPage),
-                                @"contentOffsetBefore": @{@"x": @(contentOffsetBefore.x), @"y": @(contentOffsetBefore.y)},
-                                @"contentOffsetAfter": @{@"x": @(contentOffsetAfter.x), @"y": @(contentOffsetAfter.y)},
-                                @"offsetChanged": @(fabs(contentOffsetBefore.x - contentOffsetAfter.x) > 1 || fabs(contentOffsetBefore.y - contentOffsetAfter.y) > 1)
-                            },
-                            @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-                        };
-                        NSData *logData16 = [NSJSONSerialization dataWithJSONObject:logEntry16 options:0 error:nil];
-                        NSString *logLine16 = [[NSString alloc] initWithData:logData16 encoding:NSUTF8StringEncoding];
-                        NSFileHandle *fileHandle16 = [NSFileHandle fileHandleForWritingAtPath:logPath16];
-                        if (fileHandle16) {
-                            [fileHandle16 seekToEndOfFile];
-                            [fileHandle16 writeData:[[logLine16 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                            [fileHandle16 closeFile];
-                        } else {
-                            [[logLine16 stringByAppendingString:@"\n"] writeToFile:logPath16 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                        }
-                    });
-                    // #endregion
                 });
             } else {
                 _isNavigating = NO;
@@ -1415,40 +1299,6 @@ using namespace facebook::react;
                   NSStringFromCGSize(scrollView.contentSize),
                   enabled);
         
-        // #region agent log
-        {
-            NSString *logPath1 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-            NSDictionary *logEntry1 = @{
-                @"sessionId": @"debug-session",
-                @"runId": @"init",
-                @"hypothesisId": @"D,F",
-                @"location": @"RNPDFPdfView.mm:1307",
-                @"message": @"Found UIScrollView in hierarchy",
-                @"data": @{
-                    @"depth": @(depth),
-                    @"contentSize": @{@"width": @(scrollView.contentSize.width), @"height": @(scrollView.contentSize.height)},
-                    @"frame": @{@"x": @(scrollView.frame.origin.x), @"y": @(scrollView.frame.origin.y), @"width": @(scrollView.frame.size.width), @"height": @(scrollView.frame.size.height)},
-                    @"scrollEnabled": @(scrollView.scrollEnabled),
-                    @"alwaysBounceHorizontal": @(scrollView.alwaysBounceHorizontal),
-                    @"userInteractionEnabled": @(scrollView.userInteractionEnabled),
-                    @"horizontal": @(_horizontal),
-                    @"enablePaging": @(_enablePaging)
-                },
-                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-            };
-            NSData *logData1 = [NSJSONSerialization dataWithJSONObject:logEntry1 options:0 error:nil];
-            NSString *logLine1 = [[NSString alloc] initWithData:logData1 encoding:NSUTF8StringEncoding];
-            NSFileHandle *fileHandle1 = [NSFileHandle fileHandleForWritingAtPath:logPath1];
-            if (fileHandle1) {
-                [fileHandle1 seekToEndOfFile];
-                [fileHandle1 writeData:[[logLine1 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                [fileHandle1 closeFile];
-            } else {
-                [[logLine1 stringByAppendingString:@"\n"] writeToFile:logPath1 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-        }
-        // #endregion
-        
         // Since we're starting the recursion from _pdfView, all scroll views found are within its hierarchy
         // Configure scroll properties
         BOOL previousScrollEnabled = scrollView.scrollEnabled;
@@ -1484,40 +1334,6 @@ using namespace facebook::react;
                   scrollView.bounces,
                   scrollView.delegate != nil ? @"set" : @"nil");
         
-        // #region agent log
-        {
-            NSString *logPath3 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-            NSDictionary *logEntry3 = @{
-                @"sessionId": @"debug-session",
-                @"runId": @"init",
-                @"hypothesisId": @"A,B,C,D,E",
-                @"location": @"RNPDFPdfView.mm:1374",
-                @"message": @"ScrollView configuration completed",
-                @"data": @{
-                    @"scrollEnabled": @(scrollView.scrollEnabled),
-                    @"alwaysBounceHorizontal": @(scrollView.alwaysBounceHorizontal),
-                    @"bounces": @(scrollView.bounces),
-                    @"contentSize": @{@"width": @(scrollView.contentSize.width), @"height": @(scrollView.contentSize.height)},
-                    @"userInteractionEnabled": @(scrollView.userInteractionEnabled),
-                    @"delegate": scrollView.delegate != nil ? @"set" : @"nil",
-                    @"horizontal": @(_horizontal),
-                    @"enablePaging": @(_enablePaging)
-                },
-                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-            };
-            NSData *logData3 = [NSJSONSerialization dataWithJSONObject:logEntry3 options:0 error:nil];
-            NSString *logLine3 = [[NSString alloc] initWithData:logData3 encoding:NSUTF8StringEncoding];
-            NSFileHandle *fileHandle3 = [NSFileHandle fileHandleForWritingAtPath:logPath3];
-            if (fileHandle3) {
-                [fileHandle3 seekToEndOfFile];
-                [fileHandle3 writeData:[[logLine3 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                [fileHandle3 closeFile];
-            } else {
-                [[logLine3 stringByAppendingString:@"\n"] writeToFile:logPath3 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-        }
-        // #endregion
-
         // IMPORTANT: PDFKit relies on the scrollView delegate for pinch-zoom (viewForZoomingInScrollView).
         // Install a proxy delegate that forwards to the original delegate, while still letting us observe scroll events.
         if (!_internalScrollView) {
@@ -1549,41 +1365,6 @@ using namespace facebook::react;
         RCTLogWarn(@"⚠️ [iOS Scroll] No UIScrollView found in view hierarchy (view=%@, subviewCount=%lu)", 
                   NSStringFromClass([view class]), 
                   (unsigned long)[view.subviews count]);
-        
-        // #region agent log
-        {
-            NSString *logPath6 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-            NSMutableArray *subviewClasses = [NSMutableArray array];
-            for (UIView *subview in view.subviews) {
-                [subviewClasses addObject:NSStringFromClass([subview class])];
-            }
-            NSDictionary *logEntry6 = @{
-                @"sessionId": @"debug-session",
-                @"runId": @"init",
-                @"hypothesisId": @"F",
-                @"location": @"RNPDFPdfView.mm:1446",
-                @"message": @"No UIScrollView found in hierarchy",
-                @"data": @{
-                    @"viewClass": NSStringFromClass([view class]),
-                    @"subviewCount": @([view.subviews count]),
-                    @"subviewClasses": subviewClasses,
-                    @"horizontal": @(_horizontal),
-                    @"enablePaging": @(_enablePaging)
-                },
-                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-            };
-            NSData *logData6 = [NSJSONSerialization dataWithJSONObject:logEntry6 options:0 error:nil];
-            NSString *logLine6 = [[NSString alloc] initWithData:logData6 encoding:NSUTF8StringEncoding];
-            NSFileHandle *fileHandle6 = [NSFileHandle fileHandleForWritingAtPath:logPath6];
-            if (fileHandle6) {
-                [fileHandle6 seekToEndOfFile];
-                [fileHandle6 writeData:[[logLine6 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                [fileHandle6 closeFile];
-            } else {
-                [[logLine6 stringByAppendingString:@"\n"] writeToFile:logPath6 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-        }
-        // #endregion
     }
 }
 
@@ -1604,38 +1385,6 @@ using namespace facebook::react;
                   scrollView.bounds.size.width,
                   scrollView.bounds.size.height,
                   scrollView.scrollEnabled);
-        
-        // #region agent log
-        {
-            NSString *logPath2 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-            NSDictionary *logEntry2 = @{
-                @"sessionId": @"debug-session",
-                @"runId": @"init",
-                @"hypothesisId": @"B",
-                @"location": @"RNPDFPdfView.mm:1300",
-                @"message": @"scrollViewDidScroll called",
-                @"data": @{
-                    @"eventCount": @(scrollEventCount),
-                    @"contentOffset": @{@"x": @(scrollView.contentOffset.x), @"y": @(scrollView.contentOffset.y)},
-                    @"contentSize": @{@"width": @(scrollView.contentSize.width), @"height": @(scrollView.contentSize.height)},
-                    @"bounds": @{@"width": @(scrollView.bounds.size.width), @"height": @(scrollView.bounds.size.height)},
-                    @"scrollEnabled": @(scrollView.scrollEnabled),
-                    @"alwaysBounceHorizontal": @(scrollView.alwaysBounceHorizontal)
-                },
-                @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-            };
-            NSData *logData2 = [NSJSONSerialization dataWithJSONObject:logEntry2 options:0 error:nil];
-            NSString *logLine2 = [[NSString alloc] initWithData:logData2 encoding:NSUTF8StringEncoding];
-            NSFileHandle *fileHandle2 = [NSFileHandle fileHandleForWritingAtPath:logPath2];
-            if (fileHandle2) {
-                [fileHandle2 seekToEndOfFile];
-                [fileHandle2 writeData:[[logLine2 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                [fileHandle2 closeFile];
-            } else {
-                [[logLine2 stringByAppendingString:@"\n"] writeToFile:logPath2 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-        }
-        // #endregion
     }
 
     if (!_pdfDocument || _singlePage) {
@@ -1664,36 +1413,6 @@ using namespace facebook::react;
         // Only update if page actually changed and is valid
         if (newPage != _page && newPage > 0 && newPage <= (int)_pdfDocument.pageCount) {
             RCTLogInfo(@"📄 [iOS Scroll] Page changed: %d -> %d (from scroll position)", _page, newPage);
-            // #region agent log
-            {
-                NSString *logPath12 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-                NSDictionary *logEntry12 = @{
-                    @"sessionId": @"debug-session",
-                    @"runId": @"init",
-                    @"hypothesisId": @"A,C,D",
-                    @"location": @"RNPDFPdfView.mm:1558",
-                    @"message": @"scrollViewDidScroll detected page change - BEFORE updating _page",
-                    @"data": @{
-                        @"oldPage": @(_page),
-                        @"newPage": @(newPage),
-                        @"previousPage": @(_previousPage),
-                        @"contentOffset": @{@"x": @(scrollView.contentOffset.x), @"y": @(scrollView.contentOffset.y)},
-                        @"isNavigating": @(_isNavigating)
-                    },
-                    @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-                };
-                NSData *logData12 = [NSJSONSerialization dataWithJSONObject:logEntry12 options:0 error:nil];
-                NSString *logLine12 = [[NSString alloc] initWithData:logData12 encoding:NSUTF8StringEncoding];
-                NSFileHandle *fileHandle12 = [NSFileHandle fileHandleForWritingAtPath:logPath12];
-                if (fileHandle12) {
-                    [fileHandle12 seekToEndOfFile];
-                    [fileHandle12 writeData:[[logLine12 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                    [fileHandle12 closeFile];
-                } else {
-                    [[logLine12 stringByAppendingString:@"\n"] writeToFile:logPath12 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                }
-            }
-            // #endregion
             
             // CRITICAL FIX: Update _previousPage to the new page value when page changes from user scrolling
             // This prevents updateProps from triggering programmatic navigation when React Native
@@ -1712,34 +1431,6 @@ using namespace facebook::react;
             
             // Notify about page change
             [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"pageChanged|%d|%lu", newPage, _pdfDocument.pageCount]]];
-            // #region agent log
-            {
-                NSString *logPath13 = @"/Users/punithmanthri/Documents/github jsi folder /react-native-enhanced-pdf/.cursor/debug.log";
-                NSDictionary *logEntry13 = @{
-                    @"sessionId": @"debug-session",
-                    @"runId": @"init",
-                    @"hypothesisId": @"A,C,D",
-                    @"location": @"RNPDFPdfView.mm:1570",
-                    @"message": @"scrollViewDidScroll detected page change - AFTER updating _page and _previousPage (to prevent navigation loop)",
-                    @"data": @{
-                        @"_page": @(_page),
-                        @"_previousPage": @(_previousPage),
-                        @"notificationSent": @YES
-                    },
-                    @"timestamp": @((long long)([[NSDate date] timeIntervalSince1970] * 1000))
-                };
-                NSData *logData13 = [NSJSONSerialization dataWithJSONObject:logEntry13 options:0 error:nil];
-                NSString *logLine13 = [[NSString alloc] initWithData:logData13 encoding:NSUTF8StringEncoding];
-                NSFileHandle *fileHandle13 = [NSFileHandle fileHandleForWritingAtPath:logPath13];
-                if (fileHandle13) {
-                    [fileHandle13 seekToEndOfFile];
-                    [fileHandle13 writeData:[[logLine13 stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-                    [fileHandle13 closeFile];
-                } else {
-                    [[logLine13 stringByAppendingString:@"\n"] writeToFile:logPath13 atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                }
-            }
-            // #endregion
         }
     } else {
         if (scrollEventCount % 50 == 0) {
