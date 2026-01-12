@@ -409,6 +409,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Author**: Punith M ([@126punith](https://github.com/126punith))
 
 ## Recent Fixes
+### iOS Performance - Unnecessary Path Handlers (v4.2.1)
+Use v4.2.1 it contains stable fixes for IOS with unwanted debug logs removed
 
 ### iOS Performance - Unnecessary Path Handlers (v4.2.0)
 Fixed performance issue where path-related handlers were running unnecessarily when the path value hadn't actually changed. The fix filters out "path" from effectiveChangedProps when pathActuallyChanged=NO, preventing unnecessary reconfigurations of spacing, display direction, scroll views, usePageViewController, and other path-dependent handlers. This reduces unnecessary rerenders and improves performance, especially when navigating between pages. Addresses issue #7 (Page Prop Causes Full Rerender).
