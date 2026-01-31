@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.2] - 2025-01-31
+
+### Fixed
+- **PDFCompressor Module**: Fixed "Unable to resolve module react-native-pdf-jsi/src/PDFCompressor" error ([#17](https://github.com/126punith/react-native-pdf-jsi/issues/17))
+  - Added missing `PDFCompressor.js` module to the library
+  - Exported `PDFCompressor`, `CompressionPreset`, and `CompressionLevel` from both `src/index.js` and root `index.js`
+  - Added TypeScript definitions for PDFCompressor in `index.d.ts`
+- **iOS Compilation Error**: Fixed "Call to undeclared function 'RCTLogInfo'" error in `PDFExporter.m`
+  - Added missing `#import <React/RCTLog.h>` import
+- **Native Compression Bridge**: Added `compressPDF` method to `PDFExporter` native module on both Android and iOS
+  - Bridges to existing `StreamingPDFProcessor` for actual compression
+  - Returns detailed compression results (original size, compressed size, ratio, duration)
+- **Compression Estimates**: Updated `estimateCompression()` to use realistic ratios (~15-18% savings)
+  - Previous estimates claimed 50-75% savings which was unrealistic for zlib deflate on PDFs
+  - Added accurate note explaining that all presets produce similar compression due to PDFs containing already-compressed content
+
+### Technical Details
+- **PDFExporter.java (Android)**: Added `compressPDF(inputPath, outputPath, compressionLevel, promise)` method that calls `StreamingPDFProcessor.compressPDFStreaming()`
+- **PDFExporter.m (iOS)**: Added `compressPDF:outputPath:compressionLevel:resolver:rejecter:` method that calls `StreamingPDFProcessor compressPDFStreaming:`
+- **PDFCompressor.js**: New module providing high-level compression API with presets (EMAIL, WEB, MOBILE, PRINT, ARCHIVE)
+
 ## [4.1.1] - 2025-01-05
 
 ### Fixed

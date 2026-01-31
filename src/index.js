@@ -9,6 +9,14 @@
 // Core JSI functionality
 export { default as PDFJSI } from './PDFJSI';
 
+// PDF Compression
+export { 
+    default as PDFCompressor, 
+    PDFCompressor as PDFCompressorClass,
+    CompressionPreset, 
+    CompressionLevel 
+} from './PDFCompressor';
+
 // Enhanced PDF View component
 export { default as EnhancedPdfView, EnhancedPdfUtils } from './EnhancedPdfView';
 
@@ -30,3 +38,9 @@ export {
     getPerformanceHistory,
     clearPerformanceHistory
 } from './PDFJSI';
+
+// Re-export compression utilities
+export {
+    CompressionPreset,
+    CompressionLevel
+} from './PDFCompressor';

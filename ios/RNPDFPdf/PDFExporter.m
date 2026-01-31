@@ -1,5 +1,7 @@
 #import "PDFExporter.h"
 #import "ImagePool.h"
+#import "StreamingPDFProcessor.h"
+#import <React/RCTLog.h>
 #import <PDFKit/PDFKit.h>
 #import <UIKit/UIKit.h>
 
@@ -954,6 +956,87 @@ RCT_EXPORT_METHOD(getPageCount:(NSString *)filePath
     
     NSUInteger pageCount = pdfDocument.pageCount;
     resolve(@(pageCount));
+}
+
+/**
+ * Compress PDF using streaming processor
+ * Uses O(1) constant memory regardless of file size
+ * @param inputPath Input PDF file path
+ * @param outputPath Output compressed PDF file path
+ * @param compressionLevel Compression level (0-9, 9 is maximum compression)
+ */
+RCT_EXPORT_METHOD(compressPDF:(NSString *)inputPath
+                  outputPath:(NSString *)outputPath
+                  compressionLevel:(int)compressionLevel
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    
+    RCTLogInfo(@"compressPDF called with inputPath: %@, outputPath: %@, level: %d", inputPath, outputPath, compressionLevel);
+    
+    if (!inputPath || inputPath.length == 0) {
+        reject(@"INVALID_PATH", @"Input file path is required", nil);
+        return;
+    }
+    
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:inputPath]) {
+        reject(@"FILE_NOT_FOUND", [NSString stringWithFormat:@"Input PDF file not found: %@", inputPath], nil);
+        return;
+    }
+    
+    // Generate output path if not provided
+    NSString *finalOutputPath = outputPath;
+    if (!finalOutputPath || finalOutputPath.length == 0) {
+        NSString *directory = [inputPath stringByDeletingLastPathComponent];
+        NSString *baseName = [[inputPath lastPathComponent] stringByDeletingPathExtension];
+        NSString *outputFileName = [self generateTimestampedFileName:[baseName stringByAppendingString:@"_compressed"] pageNum:-1 extension:@"pdf"];
+        finalOutputPath = [directory stringByAppendingPathComponent:outputFileName];
+    }
+    
+    // Ensure output directory exists
+    NSString *outputDir = [finalOutputPath stringByDeletingLastPathComponent];
+    if (![fileManager fileExistsAtPath:outputDir]) {
+        NSError *error;
+        [fileManager createDirectoryAtPath:outputDir withIntermediateDirectories:YES attributes:nil error:&error];
+        if (error) {
+            reject(@"DIR_CREATE_ERROR", @"Failed to create output directory", error);
+            return;
+        }
+    }
+    
+    RCTLogInfo(@"Starting compression: %@ -> %@", inputPath, finalOutputPath);
+    
+    // Use StreamingPDFProcessor for O(1) memory compression
+    StreamingPDFProcessor *processor = [StreamingPDFProcessor sharedInstance];
+    NSError *error;
+    CompressionResult *result = [processor compressPDFStreaming:inputPath
+                                                     outputPath:finalOutputPath
+                                               compressionLevel:compressionLevel
+                                                          error:&error];
+    
+    if (error || !result) {
+        reject(@"COMPRESSION_ERROR", error ? error.localizedDescription : @"Compression failed", error);
+        return;
+    }
+    
+    // Build response
+    NSDictionary *response = @{
+        @"originalSize": @(result.originalSize),
+        @"compressedSize": @(result.compressedSize),
+        @"durationMs": @(result.durationMs),
+        @"compressionRatio": @(result.compressionRatio),
+        @"spaceSavedPercent": @(result.spaceSavedPercent),
+        @"outputPath": finalOutputPath,
+        @"success": @YES
+    };
+    
+    RCTLogInfo(@"Compression complete: %.2f MB -> %.2f MB (%.1f%% saved) in %.0fms",
+              result.originalSize / (1024.0 * 1024.0),
+              result.compressedSize / (1024.0 * 1024.0),
+              result.spaceSavedPercent,
+              result.durationMs);
+    
+    resolve(response);
 }
 
 @end

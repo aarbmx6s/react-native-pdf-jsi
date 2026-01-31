@@ -409,6 +409,19 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Author**: Punith M ([@126punith](https://github.com/126punith))
 
 ## Recent Fixes
+
+### PDFCompressor Module Fix (v4.2.2)
+Fixed "Unable to resolve module react-native-pdf-jsi/src/PDFCompressor" error ([#17](https://github.com/126punith/react-native-pdf-jsi/issues/17)). The PDFCompressor module is now properly exported and accessible. Also fixed iOS compilation error for missing `RCTLogInfo` import. The compression feature now works correctly with accurate size estimates (~15-18% compression using native zlib deflate).
+
+**Usage:**
+```jsx
+import { PDFCompressor, CompressionPreset } from 'react-native-pdf-jsi';
+
+// Compress a PDF
+const result = await PDFCompressor.compressWithPreset(pdfPath, CompressionPreset.WEB);
+console.log(`Compressed: ${result.originalSizeMB}MB → ${result.compressedSizeMB}MB`);
+```
+
 ### iOS Performance - Unnecessary Path Handlers (v4.2.1)
 Use v4.2.1 it contains stable fixes for IOS with unwanted debug logs removed
 

@@ -734,4 +734,78 @@ public class PDFExporter extends ReactContextBaseJavaModule {
             promise.reject("PAGE_COUNT_ERROR", e.getMessage());
         }
     }
+
+    /**
+     * Compress PDF using streaming processor
+     * Uses O(1) constant memory regardless of file size
+     * @param inputPath Input PDF file path
+     * @param outputPath Output compressed PDF file path
+     * @param compressionLevel Compression level (0-9, 9 is maximum compression)
+     * @param promise Promise to resolve with compression result
+     */
+    @ReactMethod
+    public void compressPDF(String inputPath, String outputPath, int compressionLevel, Promise promise) {
+        try {
+            Log.d(TAG, "compressPDF called with inputPath: " + inputPath + ", outputPath: " + outputPath + ", level: " + compressionLevel);
+            
+            if (inputPath == null || inputPath.isEmpty()) {
+                promise.reject("INVALID_PATH", "Input file path is required");
+                return;
+            }
+
+            File inputFile = new File(inputPath);
+            if (!inputFile.exists()) {
+                promise.reject("FILE_NOT_FOUND", "Input PDF file not found: " + inputPath);
+                return;
+            }
+
+            // Generate output path if not provided
+            File outputFile;
+            if (outputPath == null || outputPath.isEmpty()) {
+                String baseName = inputFile.getName().replaceAll("\\.pdf$", "");
+                String outputFileName = generateTimestampedFileName(baseName + "_compressed", -1, "pdf");
+                outputFile = new File(inputFile.getParent(), outputFileName);
+            } else {
+                outputFile = new File(outputPath);
+            }
+
+            // Ensure output directory exists
+            File outputDir = outputFile.getParentFile();
+            if (outputDir != null && !outputDir.exists()) {
+                outputDir.mkdirs();
+            }
+
+            Log.d(TAG, "Starting compression: " + inputFile.getAbsolutePath() + " -> " + outputFile.getAbsolutePath());
+
+            // Use StreamingPDFProcessor for O(1) memory compression
+            StreamingPDFProcessor processor = new StreamingPDFProcessor();
+            StreamingPDFProcessor.CompressionResult result = processor.compressPDFStreaming(
+                inputFile, 
+                outputFile, 
+                compressionLevel
+            );
+
+            // Build response
+            WritableMap response = Arguments.createMap();
+            response.putDouble("originalSize", result.originalSize);
+            response.putDouble("compressedSize", result.compressedSize);
+            response.putDouble("durationMs", result.durationMs);
+            response.putDouble("compressionRatio", result.compressionRatio);
+            response.putDouble("spaceSavedPercent", result.spaceSavedPercent);
+            response.putString("outputPath", outputFile.getAbsolutePath());
+            response.putBoolean("success", true);
+
+            Log.d(TAG, String.format("Compression complete: %.2f MB -> %.2f MB (%.1f%% saved) in %dms",
+                result.originalSize / (1024.0 * 1024.0),
+                result.compressedSize / (1024.0 * 1024.0),
+                result.spaceSavedPercent,
+                result.durationMs));
+
+            promise.resolve(response);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error compressing PDF", e);
+            promise.reject("COMPRESSION_ERROR", e.getMessage(), e);
+        }
+    }
 }

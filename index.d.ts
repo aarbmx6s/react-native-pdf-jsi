@@ -219,3 +219,247 @@ export const PDFCache: PDFCacheManager;
  * CacheManager (alias for PDFCache)
  */
 export const CacheManager: PDFCacheManager;
+
+// ========================================
+// PDFCompressor (PDF Compression)
+// ========================================
+
+/**
+ * Compression presets for different use cases
+ */
+export enum CompressionPreset {
+    /** Optimized for email attachments (high compression, smaller file) */
+    EMAIL = 'email',
+    /** Optimized for web viewing (balanced compression) */
+    WEB = 'web',
+    /** Optimized for mobile devices (good compression, fast decompression) */
+    MOBILE = 'mobile',
+    /** Optimized for printing (low compression, high quality) */
+    PRINT = 'print',
+    /** Optimized for long-term archival (maximum compression) */
+    ARCHIVE = 'archive',
+    /** Custom compression settings */
+    CUSTOM = 'custom'
+}
+
+/**
+ * Compression levels (0-9, higher = more compression but slower)
+ */
+export enum CompressionLevel {
+    NONE = 0,
+    FASTEST = 1,
+    FAST = 3,
+    BALANCED = 5,
+    DEFAULT = 6,
+    GOOD = 7,
+    BETTER = 8,
+    BEST = 9
+}
+
+/**
+ * Compression options
+ */
+export interface CompressionOptions {
+    /** Compression preset (from CompressionPreset) */
+    preset?: CompressionPreset;
+    /** Compression level (0-9), overrides preset */
+    level?: number;
+    /** Output file path (optional, auto-generated if not provided) */
+    outputPath?: string;
+    /** Progress callback function */
+    onProgress?: (progress: { progress: number; bytesProcessed: number; totalBytes: number }) => void;
+}
+
+/**
+ * Compression result
+ */
+export interface CompressionResult {
+    /** Whether compression was successful */
+    success: boolean;
+    /** Input file path */
+    inputPath: string;
+    /** Output file path */
+    outputPath: string;
+    /** Original file size in bytes */
+    originalSize: number;
+    /** Compressed file size in bytes */
+    compressedSize: number;
+    /** Original file size in MB */
+    originalSizeMB: number;
+    /** Compressed file size in MB */
+    compressedSizeMB: number;
+    /** Compression ratio (0-1, lower is better) */
+    compressionRatio: number;
+    /** Space saved percentage */
+    spaceSavedPercent: number;
+    /** Duration in milliseconds */
+    durationMs: number;
+    /** Throughput in MB/s */
+    throughputMBps: number;
+    /** Preset used */
+    preset: CompressionPreset;
+    /** Compression level used */
+    compressionLevel: number;
+    /** Method used (native_streaming or fallback) */
+    method: string;
+}
+
+/**
+ * Compression estimate result
+ */
+export interface CompressionEstimate {
+    /** Input file path */
+    inputPath: string;
+    /** Original file size in bytes */
+    originalSize: number;
+    /** Original file size in MB */
+    originalSizeMB: number;
+    /** Estimated compressed size in bytes */
+    estimatedCompressedSize: number;
+    /** Estimated compressed size in MB */
+    estimatedCompressedSizeMB: number;
+    /** Estimated compression ratio */
+    estimatedCompressionRatio: number;
+    /** Estimated space savings percentage */
+    estimatedSavingsPercent: number;
+    /** Estimated duration in milliseconds */
+    estimatedDurationMs: number;
+    /** Preset used for estimate */
+    preset: CompressionPreset;
+    /** Description of the preset */
+    presetDescription: string;
+    /** Confidence level of the estimate */
+    confidence: 'low' | 'medium' | 'high';
+    /** Additional notes */
+    note: string;
+}
+
+/**
+ * PDFCompressor capabilities
+ */
+export interface CompressionCapabilities {
+    /** Whether streaming compression is available */
+    streamingCompression: boolean;
+    /** Available presets */
+    presets: CompressionPreset[];
+    /** Maximum file size in MB */
+    maxFileSizeMB: number;
+    /** Supported platforms */
+    supportedPlatforms: string[];
+    /** Current platform */
+    currentPlatform: string;
+    /** Whether native module is available */
+    nativeModuleAvailable: boolean;
+}
+
+/**
+ * PDFCompressor Manager for PDF compression
+ * Uses native streaming for O(1) memory operations on large files (1GB+)
+ */
+export interface PDFCompressorManager {
+    /**
+     * Check if compression functionality is available
+     * @returns True if compression is available
+     */
+    isAvailable(): boolean;
+    
+    /**
+     * Get compression capabilities
+     * @returns Capabilities object
+     */
+    getCapabilities(): CompressionCapabilities;
+    
+    /**
+     * Compress a PDF file
+     * @param inputPath Path to input PDF file
+     * @param options Compression options
+     * @returns Promise resolving to compression result
+     */
+    compress(inputPath: string, options?: CompressionOptions): Promise<CompressionResult>;
+    
+    /**
+     * Compress PDF with a specific preset
+     * @param inputPath Path to input PDF file
+     * @param preset Compression preset
+     * @param outputPath Output file path (optional)
+     * @returns Promise resolving to compression result
+     */
+    compressWithPreset(inputPath: string, preset: CompressionPreset, outputPath?: string): Promise<CompressionResult>;
+    
+    /**
+     * Compress PDF for email (maximum compression)
+     * @param inputPath Path to input PDF file
+     * @param outputPath Output file path (optional)
+     * @returns Promise resolving to compression result
+     */
+    compressForEmail(inputPath: string, outputPath?: string): Promise<CompressionResult>;
+    
+    /**
+     * Compress PDF for web viewing
+     * @param inputPath Path to input PDF file
+     * @param outputPath Output file path (optional)
+     * @returns Promise resolving to compression result
+     */
+    compressForWeb(inputPath: string, outputPath?: string): Promise<CompressionResult>;
+    
+    /**
+     * Compress PDF for mobile viewing
+     * @param inputPath Path to input PDF file
+     * @param outputPath Output file path (optional)
+     * @returns Promise resolving to compression result
+     */
+    compressForMobile(inputPath: string, outputPath?: string): Promise<CompressionResult>;
+    
+    /**
+     * Compress PDF for archival (maximum compression)
+     * @param inputPath Path to input PDF file
+     * @param outputPath Output file path (optional)
+     * @returns Promise resolving to compression result
+     */
+    compressForArchive(inputPath: string, outputPath?: string): Promise<CompressionResult>;
+    
+    /**
+     * Estimate compression result without actually compressing
+     * @param inputPath Path to input PDF file
+     * @param preset Compression preset
+     * @returns Promise resolving to estimated compression result
+     */
+    estimateCompression(inputPath: string, preset?: CompressionPreset): Promise<CompressionEstimate>;
+    
+    /**
+     * Delete a compressed file
+     * @param filePath Path to file to delete
+     * @returns Promise resolving to true if deleted successfully
+     */
+    deleteCompressedFile(filePath: string): Promise<boolean>;
+    
+    /**
+     * Get preset configuration
+     * @param preset Preset name
+     * @returns Preset configuration
+     */
+    getPresetConfig(preset: CompressionPreset): {
+        level: CompressionLevel;
+        targetSizeKB: number | null;
+        description: string;
+    };
+    
+    /**
+     * Get module information
+     * @returns Module info object
+     */
+    getModuleInfo(): {
+        name: string;
+        version: string;
+        platform: string;
+        nativeAvailable: boolean;
+        presets: string[];
+        compressionLevels: string[];
+        capabilities: CompressionCapabilities;
+    };
+}
+
+/**
+ * PDFCompressor singleton instance
+ */
+export const PDFCompressor: PDFCompressorManager;
