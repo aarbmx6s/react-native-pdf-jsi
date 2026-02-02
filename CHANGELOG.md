@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2025-02-02
+
+### Added
+- **Expo Support**: Added Expo config plugin for seamless integration with Expo development builds
+  - New `app.plugin.js` entry point for Expo auto-discovery
+  - `plugin/` directory with TypeScript source and compiled JavaScript
+  - Automatic Jitpack repository configuration for Android
+  - PDFKit framework linking for iOS
+  - Works with `npx expo prebuild` and `npx expo run:ios/android`
+
+### Technical Details
+- **app.plugin.js**: Expo plugin entry point that exports the compiled plugin
+- **plugin/src/index.ts**: Main plugin combining Android and iOS configurations
+- **plugin/src/withPdfJsiAndroid.ts**: Adds Jitpack maven repository for AndroidPdfViewer dependency
+- **plugin/src/withPdfJsiIos.ts**: Ensures PDFKit framework is properly linked
+- **package.json**: Added `app.plugin` field, `expo` keywords, build scripts, and devDependencies
+
+### Notes
+- Expo Go is NOT supported (requires native code)
+- Must use Expo development builds (`npx expo run:ios` or `npx expo run:android`)
+- Compatible with Expo SDK 50+ and EAS Build
+
 ## [4.2.2] - 2025-01-31
 
 ### Fixed

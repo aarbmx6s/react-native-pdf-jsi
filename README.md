@@ -9,6 +9,7 @@
 ---
 
 [![npm version](https://img.shields.io/npm/v/react-native-pdf-jsi?style=flat-square&logo=npm&color=cb3837)](https://www.npmjs.com/package/react-native-pdf-jsi)
+[![Expo Compatible](https://img.shields.io/badge/Expo-Compatible-4630EB?style=flat-square&logo=expo)](https://expo.dev)
 [![total downloads](https://img.shields.io/npm/dt/react-native-pdf-jsi?style=flat-square&logo=npm&color=cb3837)](https://www.npmjs.com/package/react-native-pdf-jsi)
 [![weekly downloads](https://img.shields.io/npm/dw/react-native-pdf-jsi?style=flat-square&logo=npm&color=cb3837)](https://www.npmjs.com/package/react-native-pdf-jsi)
 [![GitHub stars](https://img.shields.io/github/stars/126punith/react-native-pdf-jsi?style=flat-square&logo=github&color=181717)](https://github.com/126punith/react-native-pdf-jsi)
@@ -109,6 +110,51 @@ android {
 ```bash
 react-native link react-native-blob-util
 react-native link react-native-pdf-jsi
+```
+
+### Expo Installation
+
+This package works with **Expo development builds** (not Expo Go, as it requires native code).
+
+**1. Install the package and peer dependencies:**
+
+```bash
+npx expo install react-native-pdf-jsi react-native-blob-util @react-native-async-storage/async-storage
+```
+
+**2. Add the config plugin to your `app.json` or `app.config.js`:**
+
+```json
+{
+  "expo": {
+    "plugins": ["react-native-pdf-jsi"]
+  }
+}
+```
+
+**3. Rebuild your development build:**
+
+```bash
+# Generate native projects
+npx expo prebuild
+
+# Run on iOS
+npx expo run:ios
+
+# Run on Android
+npx expo run:android
+```
+
+> **Note:** The config plugin automatically configures:
+> - Android: Adds Jitpack repository for PDF rendering dependencies
+> - iOS: Ensures PDFKit framework is properly linked
+
+**For EAS Build users:**
+
+```bash
+# Build development client
+eas build --profile development --platform ios
+eas build --profile development --platform android
 ```
 
 ### Windows Installation
@@ -409,6 +455,25 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Author**: Punith M ([@126punith](https://github.com/126punith))
 
 ## Recent Fixes
+
+### Expo Support (v4.3.0)
+Added Expo config plugin for seamless integration with Expo development builds. The package now works with `npx expo prebuild` and `npx expo run:ios/android`.
+
+**Installation:**
+```bash
+npx expo install react-native-pdf-jsi react-native-blob-util @react-native-async-storage/async-storage
+```
+
+**Configuration (app.json):**
+```json
+{
+  "expo": {
+    "plugins": ["react-native-pdf-jsi"]
+  }
+}
+```
+
+**Note:** Expo Go is NOT supported (requires native code). Use Expo development builds.
 
 ### PDFCompressor Module Fix (v4.2.2)
 Fixed "Unable to resolve module react-native-pdf-jsi/src/PDFCompressor" error ([#17](https://github.com/126punith/react-native-pdf-jsi/issues/17)). The PDFCompressor module is now properly exported and accessible. Also fixed iOS compilation error for missing `RCTLogInfo` import. The compression feature now works correctly with accurate size estimates (~15-18% compression using native zlib deflate).
