@@ -60,7 +60,8 @@ public class PdfManager extends SimpleViewManager<PdfView> implements RNPDFPdfVi
 
     @Override
     public void onDropViewInstance(PdfView pdfView) {
-        pdfView = null;
+        pdfView.recycle();
+        this.pdfView = null;
     }
 
     @ReactProp(name = "path")

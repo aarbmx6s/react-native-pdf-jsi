@@ -349,6 +349,18 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
             this.drawPdf();
     }
 
+    /**
+     * Override to prevent barteksc PDFView's recycle() on navigation.
+     * The parent class calls recycle() in onDetachedFromWindow, which destroys the PDF
+     * when the view is temporarily detached (e.g., navigating to another screen).
+     * We only recycle when PdfManager.onDropViewInstance is called (component unmount).
+     */
+    @Override
+    protected void onDetachedFromWindow() {
+        // Intentionally skip super to prevent barteksc PDFView's recycle() which destroys
+        // the PDF on navigation. We only recycle when PdfManager.onDropViewInstance is called.
+    }
+
     public void drawPdf() {
         
         // FIX: Check if we actually need to reload the document

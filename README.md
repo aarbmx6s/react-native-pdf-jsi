@@ -12,6 +12,7 @@
 [![Expo Compatible](https://img.shields.io/badge/Expo-Compatible-4630EB?style=flat-square&logo=expo)](https://expo.dev)
 [![total downloads](https://img.shields.io/npm/dt/react-native-pdf-jsi?style=flat-square&logo=npm&color=cb3837)](https://www.npmjs.com/package/react-native-pdf-jsi)
 [![weekly downloads](https://img.shields.io/npm/dw/react-native-pdf-jsi?style=flat-square&logo=npm&color=cb3837)](https://www.npmjs.com/package/react-native-pdf-jsi)
+[![monthly downloads](https://img.shields.io/npm/dm/react-native-pdf-jsi?style=flat-square&logo=npm&color=cb3837)](https://www.npmjs.com/package/react-native-pdf-jsi)
 [![GitHub stars](https://img.shields.io/github/stars/126punith/react-native-pdf-jsi?style=flat-square&logo=github&color=181717)](https://github.com/126punith/react-native-pdf-jsi)
 [![license](https://img.shields.io/npm/l/react-native-pdf-jsi?style=flat-square&color=green)](https://github.com/126punith/react-native-pdf-jsi/blob/main/LICENSE)
 
@@ -455,6 +456,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Author**: Punith M ([@126punith](https://github.com/126punith))
 
 ## Recent Fixes
+
+### Android PDF Preserved on Navigation (v4.3.1)
+Fixed issue where the PDF instance was destroyed on Android when navigating away and returning to the screen ([#20](https://github.com/126punith/react-native-pdf-jsi/issues/20)). The PDF is now preserved in memory during navigation (matching iOS behavior) and only recycled when the component unmounts.
 
 ### Expo Support (v4.3.0)
 Added Expo config plugin for seamless integration with Expo development builds. The package now works with `npx expo prebuild` and `npx expo run:ios/android`.
