@@ -98,10 +98,33 @@ const float MIN_SCALE = 1.0f;
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
+    // First check if primary delegate (PDFView's internal) handles it
     if (_primary && [_primary respondsToSelector:@selector(viewForZoomingInScrollView:)]) {
-        return [_primary viewForZoomingInScrollView:scrollView];
+        UIView *zoomView = [_primary viewForZoomingInScrollView:scrollView];
+        if (zoomView != nil) {
+            NSLog(@"🔍 [iOS Zoom Delegate] Primary delegate returned zoom view: %@", NSStringFromClass([zoomView class]));
+            return zoomView;
+        }
     }
-    return nil;
+
+    // PDFKit's scroll view needs to zoom the PDFDocumentView
+    // Search for it in the hierarchy
+    for (UIView *subview in scrollView.subviews) {
+        NSString *className = NSStringFromClass([subview class]);
+        if ([className containsString:@"PDFDocumentView"] || [className containsString:@"PDFPage"]) {
+            NSLog(@"🔍 [iOS Zoom Delegate] Found PDF view for zooming: %@", className);
+            return subview;
+        }
+    }
+
+    // Fallback to first subview if it exists
+    UIView *fallback = scrollView.subviews.firstObject;
+    if (fallback) {
+        NSLog(@"🔍 [iOS Zoom Delegate] Using fallback zoom view: %@", NSStringFromClass([fallback class]));
+    } else {
+        NSLog(@"⚠️ [iOS Zoom Delegate] WARNING: No view found for zooming! Scroll view has %lu subviews", (unsigned long)scrollView.subviews.count);
+    }
+    return fallback;
 }
 
 @end
@@ -443,10 +466,14 @@ using namespace facebook::react;
     [[_pdfView document] setDelegate: self];
     [_pdfView setDelegate: self];
 
-    // Disable built-in double tap, so as not to conflict with custom recognizers.
+    // Only disable double-tap recognizers to avoid conflicts with custom double-tap
+    // Leave all other gestures (including pinch) enabled
     for (UIGestureRecognizer *recognizer in _pdfView.gestureRecognizers) {
         if ([recognizer isKindOfClass:[UITapGestureRecognizer class]]) {
-            recognizer.enabled = NO;
+            UITapGestureRecognizer *tapGesture = (UITapGestureRecognizer *)recognizer;
+            if (tapGesture.numberOfTapsRequired == 2) {
+                recognizer.enabled = NO;
+            }
         }
     }
 
@@ -661,6 +688,18 @@ using namespace facebook::react;
                     _pdfView.maxScaleFactor = _fixScaleFactor*_maxScale;
                 }
             }
+            
+            // CRITICAL: Also configure the internal scroll view zoom scales
+            // This must be done AFTER _fixScaleFactor is set above
+            if (_internalScrollView && _fixScaleFactor > 0) {
+                _internalScrollView.minimumZoomScale = _fixScaleFactor * _minScale;
+                _internalScrollView.maximumZoomScale = _fixScaleFactor * _maxScale;
+                _internalScrollView.zoomScale = _pdfView.scaleFactor;
+                RCTLogInfo(@"🔍 [iOS Zoom] Configured internal scroll view zoom scales - min=%f, max=%f, current=%f", 
+                          _internalScrollView.minimumZoomScale, 
+                          _internalScrollView.maximumZoomScale, 
+                          _internalScrollView.zoomScale);
+            }
 
         }
 
@@ -668,6 +707,12 @@ using namespace facebook::react;
             _pdfView.scaleFactor = _scale * _fixScaleFactor;
             if (_pdfView.scaleFactor>_pdfView.maxScaleFactor) _pdfView.scaleFactor = _pdfView.maxScaleFactor;
             if (_pdfView.scaleFactor<_pdfView.minScaleFactor) _pdfView.scaleFactor = _pdfView.minScaleFactor;
+            
+            // Also update internal scroll view zoom scale when scale changes
+            if (_internalScrollView && _fixScaleFactor > 0) {
+                _internalScrollView.zoomScale = _pdfView.scaleFactor;
+                RCTLogInfo(@"🔍 [iOS Zoom] Updated internal scroll view zoom scale to %f", _internalScrollView.zoomScale);
+            }
         }
 
         if (_pdfDocument && ([effectiveChangedProps containsObject:@"path"] || [changedProps containsObject:@"horizontal"])) {
@@ -1328,6 +1373,18 @@ using namespace facebook::react;
         // Keep vertical bounce enabled for natural scrolling feel
         scrollView.bounces = YES;
         
+        // Configure scroll view zoom scales to match PDFView's scale factors
+        // This enables native pinch-to-zoom gestures
+        if (_fixScaleFactor > 0) {
+            scrollView.minimumZoomScale = _fixScaleFactor * _minScale;
+            scrollView.maximumZoomScale = _fixScaleFactor * _maxScale;
+            scrollView.zoomScale = _pdfView.scaleFactor;
+            RCTLogInfo(@"🔍 [iOS Zoom] Configured zoom scales - min=%f, max=%f, current=%f", 
+                      scrollView.minimumZoomScale, 
+                      scrollView.maximumZoomScale, 
+                      scrollView.zoomScale);
+        }
+        
         RCTLogInfo(@"📊 [iOS Scroll] ScrollView config - scrollEnabled=%d, alwaysBounceHorizontal=%d, bounces=%d, delegate=%@", 
                   scrollView.scrollEnabled,
                   scrollView.alwaysBounceHorizontal,
@@ -1336,23 +1393,30 @@ using namespace facebook::react;
         
         // IMPORTANT: PDFKit relies on the scrollView delegate for pinch-zoom (viewForZoomingInScrollView).
         // Install a proxy delegate that forwards to the original delegate, while still letting us observe scroll events.
-        if (!_internalScrollView) {
-            RCTLogInfo(@"✅ [iOS Scroll] Setting internal scroll view reference");
+        // CRITICAL FIX: Always set up delegate for new scroll views (PDFView may recreate scroll view on document load)
+        if (!_internalScrollView || _internalScrollView != scrollView) {
+            RCTLogInfo(@"✅ [iOS Scroll] Setting up scroll view delegate (new=%d)", _internalScrollView == nil);
             _internalScrollView = scrollView;
-            if (scrollView.delegate && scrollView.delegate != self) {
-                _originalScrollDelegate = scrollView.delegate;
-                RCTLogInfo(@"📝 [iOS Scroll] Stored original scroll delegate");
+            
+            // Get the current delegate (might be PDFView's internal delegate)
+            id<UIScrollViewDelegate> currentDelegate = scrollView.delegate;
+            
+            // Only capture original delegate if it's not us or our proxy
+            if (currentDelegate && currentDelegate != self && ![currentDelegate isKindOfClass:[RNPDFScrollViewDelegateProxy class]]) {
+                _originalScrollDelegate = currentDelegate;
+                RCTLogInfo(@"📝 [iOS Scroll] Captured original scroll delegate: %@", NSStringFromClass([currentDelegate class]));
             }
+            
             if (_originalScrollDelegate) {
                 _scrollDelegateProxy = [[RNPDFScrollViewDelegateProxy alloc] initWithPrimary:_originalScrollDelegate secondary:(id<UIScrollViewDelegate>)self];
                 scrollView.delegate = (id<UIScrollViewDelegate>)_scrollDelegateProxy;
                 RCTLogInfo(@"🔗 [iOS Scroll] Installed scroll delegate proxy");
             } else {
                 scrollView.delegate = self;
-                RCTLogInfo(@"🔗 [iOS Scroll] Set self as scroll delegate");
+                RCTLogInfo(@"🔗 [iOS Scroll] Set self as scroll delegate (no original delegate)");
             }
         } else {
-            RCTLogInfo(@"⚠️ [iOS Scroll] Internal scroll view already set, skipping delegate setup");
+            RCTLogInfo(@"⚠️ [iOS Scroll] Same scroll view, delegate already configured");
         }
     }
     
@@ -1438,6 +1502,57 @@ using namespace facebook::react;
                       pdfPoint.x, pdfPoint.y);
         }
     }
+}
+
+#pragma mark - UIScrollViewDelegate Zoom Support
+
+- (void)scrollViewDidZoom:(UIScrollView *)scrollView {
+    // Called during pinch-to-zoom
+    if (_fixScaleFactor > 0 && _pdfView.scaleFactor > 0) {
+        float newScale = _pdfView.scaleFactor / _fixScaleFactor;
+
+        // Only notify if scale changed significantly (prevent spam)
+        if (fabs(_scale - newScale) > 0.01f) {
+            _scale = newScale;
+            RCTLogInfo(@"🔍 [iOS Zoom] Pinch zoom - scale changed to %f", _scale);
+            [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:
+                [NSString stringWithFormat:@"scaleChanged|%f", _scale]]];
+        }
+    }
+}
+
+// CRITICAL: Return the view that should be zoomed
+- (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
+    // Search for PDFDocumentView in the scroll view's hierarchy
+    for (UIView *subview in scrollView.subviews) {
+        NSString *className = NSStringFromClass([subview class]);
+        if ([className containsString:@"PDFDocumentView"] || [className containsString:@"PDFPage"]) {
+            RCTLogInfo(@"🔍 [iOS Zoom] viewForZoomingInScrollView returning: %@", className);
+            return subview;
+        }
+    }
+    
+    // Fallback to first subview
+    UIView *fallback = scrollView.subviews.firstObject;
+    if (fallback) {
+        RCTLogInfo(@"🔍 [iOS Zoom] viewForZoomingInScrollView using fallback: %@", NSStringFromClass([fallback class]));
+        return fallback;
+    }
+    
+    RCTLogInfo(@"⚠️ [iOS Zoom] viewForZoomingInScrollView returning NIL - no view to zoom!");
+    return nil;
+}
+
+- (void)scrollViewWillBeginZooming:(UIScrollView *)scrollView withView:(UIView *)view {
+    // Optional: Track zoom start
+    RCTLogInfo(@"🔍 [iOS Zoom] Will begin zooming");
+}
+
+- (void)scrollViewDidEndZooming:(UIScrollView *)scrollView
+                        withView:(UIView *)view
+                         atScale:(CGFloat)scale {
+    // Optional: Track zoom end
+    RCTLogInfo(@"🔍 [iOS Zoom] Did end zooming at scale %f", scale);
 }
 
 // Enhanced progressive loading methods
