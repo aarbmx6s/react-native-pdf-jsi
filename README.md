@@ -457,6 +457,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Recent Fixes
 
+### iOS Pinch-to-Zoom (v4.3.2)
+Fixed iOS pinch-to-zoom not working when the scroll view delegate was set to the view itself or when the delegate proxy's primary didn't implement `viewForZoomingInScrollView`. Implemented the missing `viewForZoomingInScrollView:` in RNPDFPdfView so the scroll view receives the correct zoomable view. Fixes [#23](https://github.com/126punith/react-native-pdf-jsi/issues/23) (PR [#22](https://github.com/126punith/react-native-pdf-jsi/pull/22)).
+
 ### Android PDF Preserved on Navigation (v4.3.1)
 Fixed issue where the PDF instance was destroyed on Android when navigating away and returning to the screen ([#20](https://github.com/126punith/react-native-pdf-jsi/issues/20)). The PDF is now preserved in memory during navigation (matching iOS behavior) and only recycled when the component unmounts.
 
