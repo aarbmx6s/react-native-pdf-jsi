@@ -68,6 +68,8 @@ UIView
 @property(nonatomic) int spacing;
 @property(nonatomic, strong) NSString *password;
 @property(nonatomic) BOOL singlePage;
+@property(nonatomic, strong) NSString *pdfId;
+@property(nonatomic, copy) NSArray *highlightRects;
 
 @property(nonatomic, copy) RCTBubblingEventBlock onChange;
 

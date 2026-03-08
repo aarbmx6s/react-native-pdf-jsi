@@ -69,6 +69,16 @@ public class PdfManager extends SimpleViewManager<PdfView> implements RNPDFPdfVi
         pdfView.setPath(path);
     }
 
+    @ReactProp(name = "pdfId")
+    public void setPdfId(PdfView pdfView, String pdfId) {
+        pdfView.setPdfId(pdfId);
+    }
+
+    @ReactProp(name = "highlightRects")
+    public void setHighlightRects(PdfView pdfView, ReadableArray highlightRects) {
+        pdfView.setHighlightRects(highlightRects);
+    }
+
     // page start from 1
     @ReactProp(name = "page")
     public void setPage(PdfView pdfView, int page) {

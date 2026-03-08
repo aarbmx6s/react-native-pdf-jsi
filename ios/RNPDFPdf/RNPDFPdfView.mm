@@ -7,6 +7,7 @@
  */
 
 #import "RNPDFPdfView.h"
+#import "SearchRegistry.h"
 
 #import <Foundation/Foundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -54,6 +55,37 @@
 const float MAX_SCALE = 3.0f;
 const float MIN_SCALE = 1.0f;
 
+
+/** Overlay that draws highlight rects on top of the PDF view. */
+@interface HighlightOverlayView : UIView
+@property (nonatomic, weak) PDFView *pdfView;
+@property (nonatomic, copy) NSArray<NSDictionary *> *highlightRects;
+@end
+
+@implementation HighlightOverlayView
+- (void)drawRect:(CGRect)rect {
+    PDFView *pv = self.pdfView;
+    NSArray *items = self.highlightRects;
+    if (!pv || !pv.document || !items.count) return;
+    PDFDocument *doc = pv.document;
+    [[UIColor colorWithRed:1 green:1 blue:0 alpha:0.35] setFill];
+    for (NSDictionary *item in items) {
+        NSNumber *pageNum = item[@"page"];
+        NSString *rectStr = item[@"rect"];
+        if (!pageNum || !rectStr.length) continue;
+        int page1 = pageNum.intValue;
+        if (page1 < 1) continue;
+        PDFPage *page = [doc pageAtIndex:(NSUInteger)(page1 - 1)];
+        if (!page) continue;
+        NSArray<NSString *> *parts = [rectStr componentsSeparatedByString:@","];
+        if (parts.count != 4) continue;
+        CGFloat left = parts[0].doubleValue, top = parts[1].doubleValue, right = parts[2].doubleValue, bottom = parts[3].doubleValue;
+        CGRect pageRect = CGRectMake(left, bottom, right - left, top - bottom);
+        CGRect viewRect = [pv convertRect:pageRect fromPage:page];
+        CGContextFillRect(UIGraphicsGetCurrentContext(), viewRect);
+    }
+}
+@end
 
 @interface RNPDFScrollViewDelegateProxy : NSObject <UIScrollViewDelegate>
 - (instancetype)initWithPrimary:(id<UIScrollViewDelegate>)primary secondary:(id<UIScrollViewDelegate>)secondary;
@@ -181,6 +213,13 @@ const float MIN_SCALE = 1.0f;
     // Track usePageViewController state to prevent unnecessary reconfiguration
     BOOL _currentUsePageViewController;
     BOOL _usePageViewControllerStateInitialized;
+    
+    // Search and highlight (iOS parity with Android)
+    NSString *_pdfId;
+    NSArray *_highlightRects;
+    HighlightOverlayView *_highlightOverlay;
+    /// Local file path when document loaded (used for SearchRegistry; may differ from _path which can be URI)
+    NSString *_lastLoadedPath;
 }
 
 #ifdef RCT_NEW_ARCH_ENABLED
@@ -315,6 +354,30 @@ using namespace facebook::react;
         _scrollEnabled = newProps.scrollEnabled;
         [updatedPropNames addObject:@"scrollEnabled"];
     }
+    NSString *newPdfId = RCTNSStringFromStringNilIfEmpty(newProps.pdfId);
+    if (_pdfId != newPdfId && ![newPdfId isEqualToString:_pdfId]) {
+        if (_pdfId.length) [SearchRegistry unregisterPath:_pdfId];
+        _pdfId = [newPdfId copy];
+        [updatedPropNames addObject:@"pdfId"];
+        // Only register local file paths; never register URIs - onDocumentChanged will register when we have local path
+        NSString *pathToRegister = nil;
+        if (_lastLoadedPath.length > 0) {
+            pathToRegister = _lastLoadedPath;
+        } else if (_path.length > 0 && [_path hasPrefix:@"/"]) {
+            pathToRegister = _path;
+        }
+        if (_pdfId.length && pathToRegister.length > 0) {
+            [SearchRegistry registerPath:_pdfId path:pathToRegister];
+            RCTLogInfo(@"✅ [iOS] SearchRegistry registered path for pdfId: %@ (from updateProps)", _pdfId);
+        }
+    }
+    // Convert codegen vector of {page, rect} to NSArray for setHighlightRects
+    NSMutableArray *newHighlightRects = [NSMutableArray array];
+    for (const auto &item : newProps.highlightRects) {
+      [newHighlightRects addObject:@{ @"page": @(item.page), @"rect": [NSString stringWithUTF8String:item.rect.c_str()] }];
+    }
+    [self setHighlightRects:[newHighlightRects copy]];
+    [updatedPropNames addObject:@"highlightRects"];
     
     [super updateProps:props oldProps:oldProps];
     [self didSetProps:updatedPropNames];
@@ -329,10 +392,11 @@ using namespace facebook::react;
 - (void)prepareForRecycle
 {
     [super prepareForRecycle];
-
+    if (_pdfId.length) [SearchRegistry unregisterPath:_pdfId];
     [_pdfView removeFromSuperview];
     _pdfDocument = Nil;
     _pdfView = Nil;
+    _highlightOverlay = Nil;
     //Remove notifications
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PDFViewDocumentChangedNotification" object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PDFViewPageChangedNotification" object:nil];
@@ -441,6 +505,11 @@ using namespace facebook::react;
     _preloadQueue = [[NSOperationQueue alloc] init];
     _preloadQueue.maxConcurrentOperationCount = 3;
     _preloadQueue.qualityOfService = NSQualityOfServiceBackground;
+
+    _pdfId = nil;
+    _highlightRects = nil;
+    _lastLoadedPath = nil;
+    _highlightOverlay = nil;
 
     // init and config PDFView
     _pdfView = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, 500, 500)];
@@ -997,8 +1066,56 @@ using namespace facebook::react;
         RCTLogInfo(@"🔍 [iOS] loadComplete message: %@", message);
         
         [self notifyOnChangeWithMessage:message];
+        
+        // Store local path so we can register when pdfId is set (Fabric may set pdfId after document load)
+        _lastLoadedPath = [pathValue copy];
+        // Register path for searchTextDirect (iOS parity with Android)
+        if (_pdfId.length && pathValue.length) {
+            [SearchRegistry registerPath:_pdfId path:pathValue];
+            RCTLogInfo(@"✅ [iOS] SearchRegistry registered path for pdfId: %@ (from onDocumentChanged)", _pdfId);
+        }
     }
 
+}
+
+- (void)setPdfId:(NSString *)pdfId {
+    if (_pdfId.length && ![pdfId isEqualToString:_pdfId]) {
+        [SearchRegistry unregisterPath:_pdfId];
+    }
+    _pdfId = [pdfId copy];
+    // If document already loaded, register path now (Fabric may set pdfId after path/document load).
+    // Only register local file paths; never register URIs (http/https) - PDFDocument needs file path.
+    NSString *pathToRegister = nil;
+    if (_lastLoadedPath.length > 0) {
+        pathToRegister = _lastLoadedPath;
+    } else if (_path.length > 0 && [_path hasPrefix:@"/"]) {
+        pathToRegister = _path;
+    }
+    if (_pdfId.length && pathToRegister.length > 0) {
+        [SearchRegistry registerPath:_pdfId path:pathToRegister];
+        RCTLogInfo(@"✅ [iOS] SearchRegistry registered path for pdfId: %@ (from setPdfId)", _pdfId);
+    }
+}
+
+- (void)setHighlightRects:(NSArray *)highlightRects {
+    _highlightRects = [highlightRects copy];
+    if (!_pdfView) return;
+    if (_highlightRects.count > 0) {
+        if (!_highlightOverlay) {
+            _highlightOverlay = [[HighlightOverlayView alloc] initWithFrame:_pdfView.bounds];
+            _highlightOverlay.backgroundColor = [UIColor clearColor];
+            _highlightOverlay.userInteractionEnabled = NO;
+            _highlightOverlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            _highlightOverlay.pdfView = _pdfView;
+            [_pdfView addSubview:_highlightOverlay];
+            [_pdfView bringSubviewToFront:_highlightOverlay];
+        }
+        _highlightOverlay.highlightRects = _highlightRects;
+        [_highlightOverlay setNeedsDisplay];
+    } else if (_highlightOverlay) {
+        _highlightOverlay.highlightRects = @[];
+        [_highlightOverlay setNeedsDisplay];
+    }
 }
 
 -(NSString *) getTableContents
@@ -1118,6 +1235,7 @@ using namespace facebook::react;
 
         RLog(@"Enhanced PDF: Navigated to page %d", _page);
         [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"pageChanged|%lu|%lu", page+1, numberOfPages]]];
+        if (_highlightOverlay) [_highlightOverlay setNeedsDisplay];
     }
 
 }
@@ -1132,6 +1250,7 @@ using namespace facebook::react;
             [self notifyOnChangeWithMessage:[[NSString alloc] initWithString:[NSString stringWithFormat:@"scaleChanged|%f", _scale]]];
         }
     }
+    if (_highlightOverlay) [_highlightOverlay setNeedsDisplay];
 }
 
 #pragma mark gesture process
@@ -1435,9 +1554,11 @@ using namespace facebook::react;
 #pragma mark - UIScrollViewDelegate
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    // Redraw highlight overlay so rects stay aligned when user scrolls (pan)
+    if (_highlightOverlay) [_highlightOverlay setNeedsDisplay];
     static int scrollEventCount = 0;
     scrollEventCount++;
-    
+
     // Log scroll events periodically (every 10th event to avoid spam)
     if (scrollEventCount % 10 == 0) {
         RCTLogInfo(@"📜 [iOS Scroll] scrollViewDidScroll #%d - offset=(%.2f, %.2f), contentSize=(%.2f, %.2f), bounds=(%.2f, %.2f), scrollEnabled=%d", 
@@ -1507,7 +1628,8 @@ using namespace facebook::react;
 #pragma mark - UIScrollViewDelegate Zoom Support
 
 - (void)scrollViewDidZoom:(UIScrollView *)scrollView {
-    // Called during pinch-to-zoom
+    // Called during pinch-to-zoom — redraw highlight overlay so rects stay aligned with zoomed content
+    if (_highlightOverlay) [_highlightOverlay setNeedsDisplay];
     if (_fixScaleFactor > 0 && _pdfView.scaleFactor > 0) {
         float newScale = _pdfView.scaleFactor / _fixScaleFactor;
 
@@ -1551,7 +1673,8 @@ using namespace facebook::react;
 - (void)scrollViewDidEndZooming:(UIScrollView *)scrollView
                         withView:(UIView *)view
                          atScale:(CGFloat)scale {
-    // Optional: Track zoom end
+    // Redraw highlight overlay so rects match final zoom level
+    if (_highlightOverlay) [_highlightOverlay setNeedsDisplay];
     RCTLogInfo(@"🔍 [iOS Zoom] Did end zooming at scale %f", scale);
 }
 

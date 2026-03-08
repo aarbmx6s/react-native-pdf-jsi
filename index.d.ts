@@ -88,6 +88,17 @@ export interface PdfProps {
     onPageSingleTap?: (page: number, x: number, y: number) => void,
     onScaleChanged?: (scale: number) => void,
     onPressLink?: (url: string) => void,
+    /**
+     * Optional. When set, use this id with searchTextDirect(pdfId, ...) for programmatic text search.
+     * On iOS, the same id must be passed to the Pdf view and to searchTextDirect. One view per pdfId.
+     */
+    pdfId?: string,
+    /**
+     * Optional. Array of rects to highlight on the PDF (e.g. from searchTextDirect results).
+     * Each item: { page: number, rect: string } where rect is "left,top,right,bottom" in PDF page coordinates.
+     * Supported on Android; iOS can be added later.
+     */
+    highlightRects?: Array<{ page: number; rect: string }>,
 }
 
 declare class Pdf extends React.Component<PdfProps, any> {
@@ -463,3 +474,26 @@ export interface PDFCompressorManager {
  * PDFCompressor singleton instance
  */
 export const PDFCompressor: PDFCompressorManager;
+
+// ========================================
+// JSI / Programmatic search
+// ========================================
+
+export interface PDFSearchResultItem {
+    page: number;
+    text: string;
+    /** Bounds of the match (format is platform-specific; on iOS a CGRect string). */
+    rect: string;
+}
+
+/**
+ * Search PDF text programmatically.
+ * On iOS: pass the same pdfId to the Pdf view (pdfId prop) so the view is registered for search.
+ * On Android: returns empty array until a native text-extraction implementation is added.
+ */
+export function searchTextDirect(
+    pdfId: string,
+    searchTerm: string,
+    startPage: number,
+    endPage: number
+): Promise<PDFSearchResultItem[]>;

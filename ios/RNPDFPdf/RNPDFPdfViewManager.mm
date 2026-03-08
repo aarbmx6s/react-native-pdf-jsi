@@ -52,6 +52,8 @@ RCT_EXPORT_VIEW_PROPERTY(spacing, int);
 RCT_EXPORT_VIEW_PROPERTY(password, NSString);
 RCT_EXPORT_VIEW_PROPERTY(onChange, RCTBubblingEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(singlePage, BOOL);
+RCT_EXPORT_VIEW_PROPERTY(pdfId, NSString);
+RCT_EXPORT_VIEW_PROPERTY(highlightRects, NSArray);
 
 RCT_EXPORT_METHOD(supportPDFKit:(RCTResponseSenderBlock)callback)
 {
@@ -177,12 +179,14 @@ RCT_EXPORT_METHOD(optimizeMemory:(NSString *)pdfId
 
 RCT_EXPORT_METHOD(searchTextDirect:(NSString *)pdfId
                   searchTerm:(NSString *)searchTerm
+                  startPage:(NSInteger)startPage
+                  endPage:(NSInteger)endPage
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
     PDFJSIManager *jsiManager = [self.bridge moduleForClass:[PDFJSIManager class]];
     if (jsiManager) {
-        [jsiManager searchTextDirect:pdfId searchTerm:searchTerm startPage:1 endPage:999 resolver:resolve rejecter:reject];
+        [jsiManager searchTextDirect:pdfId searchTerm:searchTerm startPage:startPage endPage:endPage resolver:resolve rejecter:reject];
     } else {
         reject(@"JSI_NOT_AVAILABLE", @"PDFJSIManager not available", nil);
     }

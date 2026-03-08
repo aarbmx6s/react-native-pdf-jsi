@@ -392,7 +392,7 @@ class PDFJSIManager {
             if (Platform.OS === 'android') {
                 results = await PDFJSIManagerNative.searchTextDirect(pdfId, searchTerm, startPage, endPage);
             } else if (Platform.OS === 'ios') {
-                results = await RNPDFPdfViewManager.searchTextDirect(pdfId, searchTerm);
+                results = await RNPDFPdfViewManager.searchTextDirect(pdfId, searchTerm, startPage, endPage);
             } else {
                 throw new Error(`Platform ${Platform.OS} not supported`);
             }

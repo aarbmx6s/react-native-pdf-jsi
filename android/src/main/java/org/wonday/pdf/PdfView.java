@@ -20,7 +20,12 @@ import android.net.Uri;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.os.Handler;
+
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
 import android.os.Looper;
 
 
@@ -52,6 +57,8 @@ import static java.lang.String.format;
 
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.google.gson.Gson;
 
@@ -77,7 +84,8 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     private FitPolicy fitPolicy = FitPolicy.WIDTH;
     private boolean singlePage = false;
     private boolean scrollEnabled = true;
-    
+    private String pdfId = null;
+
     private String decelerationRate = "normal"; // "normal", "fast", "slow"
 
     private float originalWidth = 0;
@@ -94,8 +102,29 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     private int oldW = 0;
     private int oldH = 0;
 
+    /** Search highlight rects: list of { page (1-based), rect "left,top,right,bottom" in PDF points } */
+    private List<HighlightRect> highlightRects = new ArrayList<>();
+    private static final int HIGHLIGHT_COLOR = Color.argb(80, 255, 255, 0);
+    private final Paint highlightPaint = new Paint();
+
     public PdfView(Context context, AttributeSet set){
         super(context, set);
+        highlightPaint.setColor(HIGHLIGHT_COLOR);
+        highlightPaint.setStyle(Paint.Style.FILL);
+    }
+
+    /** Entry for one highlight: page (1-based) and rect in PDF points "left,top,right,bottom". */
+    private static class HighlightRect {
+        final int page;
+        final float left, top, right, bottom;
+
+        HighlightRect(int page, float left, float top, float right, float bottom) {
+            this.page = page;
+            this.left = left;
+            this.top = top;
+            this.right = right;
+            this.bottom = bottom;
+        }
     }
 
     @Override
@@ -225,6 +254,9 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
                         self.loadCompleteDispatched = true;
                         showLog("loadComplete: Event dispatched successfully (delayed)");
                     }
+                    if (self.pdfId != null && self.path != null) {
+                        SearchRegistry.registerPath(self.pdfId, self.path);
+                    }
                 }
             });
         } else {
@@ -340,6 +372,42 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
 
         lastPageWidth = pageWidth;
         lastPageHeight = pageHeight;
+
+        if (!highlightRects.isEmpty() && pdfId != null) {
+            int pageOneBased = displayedPage + 1;
+            try {
+                float pdfW = 0, pdfH = 0;
+                float[] sizePt = SearchRegistry.getPageSizePoints(pdfId, displayedPage);
+                if (sizePt != null && sizePt.length >= 2 && sizePt[0] > 0 && sizePt[1] > 0) {
+                    pdfW = sizePt[0];
+                    pdfH = sizePt[1];
+                }
+                if (pdfW <= 0 || pdfH <= 0) {
+                    SizeF fallback = getPageSize(displayedPage);
+                    if (fallback != null) {
+                        pdfW = fallback.getWidth();
+                        pdfH = fallback.getHeight();
+                    }
+                }
+                if (pdfW > 0 && pdfH > 0) {
+                    float scaleX = pageWidth / pdfW;
+                    float scaleY = pageHeight / pdfH;
+                    for (HighlightRect hr : highlightRects) {
+                        if (hr.page != pageOneBased) continue;
+                        float left = hr.left * scaleX;
+                        float right = hr.right * scaleX;
+                        float top = hr.top * scaleY;
+                        float bottom = hr.bottom * scaleY;
+                        // PDF coords: origin bottom-left, so top > bottom. Canvas: origin top-left.
+                        float canvasTop = pageHeight - top;
+                        float canvasBottom = pageHeight - bottom;
+                        canvas.drawRect(left, canvasTop, right, canvasBottom, highlightPaint);
+                    }
+                }
+            } catch (Exception e) {
+                showLog("Highlight draw error: " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -359,6 +427,14 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     protected void onDetachedFromWindow() {
         // Intentionally skip super to prevent barteksc PDFView's recycle() which destroys
         // the PDF on navigation. We only recycle when PdfManager.onDropViewInstance is called.
+    }
+
+    @Override
+    public void recycle() {
+        if (pdfId != null) {
+            SearchRegistry.unregisterPath(pdfId);
+        }
+        super.recycle();
     }
 
     public void drawPdf() {
@@ -444,12 +520,43 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     }
 
     public void setPath(String path) {
-        // Path changed - need to reload document
+        if (pdfId != null) {
+            SearchRegistry.unregisterPath(pdfId);
+        }
         needsReload = true;
         this.path = path;
-        // Reset flags when path changes
         loadCompleteDispatched = false;
         lastKnownPageCount = 0;
+    }
+
+    public void setPdfId(String pdfId) {
+        if (this.pdfId != null && !this.pdfId.equals(pdfId)) {
+            SearchRegistry.unregisterPath(this.pdfId);
+        }
+        this.pdfId = pdfId;
+    }
+
+    public void setHighlightRects(ReadableArray arr) {
+        highlightRects.clear();
+        if (arr == null) return;
+        for (int i = 0; i < arr.size(); i++) {
+            ReadableMap map = arr.getMap(i);
+            if (map == null || !map.hasKey("page") || !map.hasKey("rect")) continue;
+            int page = map.getInt("page");
+            String rectStr = map.getString("rect");
+            if (rectStr == null || rectStr.equals("{}")) continue;
+            String[] parts = rectStr.split(",");
+            if (parts.length != 4) continue;
+            try {
+                float left = Float.parseFloat(parts[0].trim());
+                float top = Float.parseFloat(parts[1].trim());
+                float right = Float.parseFloat(parts[2].trim());
+                float bottom = Float.parseFloat(parts[3].trim());
+                highlightRects.add(new HighlightRect(page, left, top, right, bottom));
+            } catch (NumberFormatException ignored) {}
+        }
+        invalidate();
+        postInvalidate();
     }
 
     // page start from 1

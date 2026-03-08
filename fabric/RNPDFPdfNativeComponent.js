@@ -37,6 +37,8 @@
    password: ?string,
    onChange: ?BubblingEventHandler<ChangeEvent>,
    singlePage: ?boolean,
+   pdfId: ?string,
+   highlightRects: ?$ReadOnlyArray<$ReadOnly<{|page: Int32, rect: string|}>>,
  |}>;
 
  interface NativeCommands {

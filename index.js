@@ -18,6 +18,7 @@ import {
     StyleSheet,
     Image,
     Text,
+    NativeModules,
     requireNativeComponent
 } from 'react-native';
 // Codegen component variables - will be loaded lazily to prevent hooks errors
@@ -27,7 +28,7 @@ import ReactNativeBlobUtil from 'react-native-blob-util'
 import {ViewPropTypes} from 'deprecated-react-native-prop-types';
 const SHA1 = require('crypto-js/sha1');
 import PdfView from './PdfView';
-import PDFJSI from './src/PDFJSI';
+import PDFJSI, { searchTextDirect } from './src/PDFJSI';
 
 export default class Pdf extends Component {
 
@@ -67,6 +68,8 @@ export default class Pdf extends Component {
         onPageSingleTap: PropTypes.func,
         onScaleChanged: PropTypes.func,
         onPressLink: PropTypes.func,
+        pdfId: PropTypes.string,
+        highlightRects: PropTypes.arrayOf(PropTypes.shape({ page: PropTypes.number.isRequired, rect: PropTypes.string.isRequired })),
 
         // Props that are not available in the earlier react native version, added to prevent crashed on android
         accessibilityLabel: PropTypes.string,
@@ -111,6 +114,8 @@ export default class Pdf extends Component {
         },
         onPressLink: (url) => {
         },
+        pdfId: undefined,
+        highlightRects: undefined,
     };
 
     constructor(props) {
@@ -594,7 +599,24 @@ export default class Pdf extends Component {
                 if (!filePath || filePath.trim() === '') {
                     filePath = this.downloadedFilePath || this.state.path || '';
                 }
-                
+                // Register path for search (iOS: ensures SearchRegistry has path when pdfId may not reach native view)
+                if (this.props.pdfId && filePath) {
+                    const PDFJSIManager = NativeModules.PDFJSIManager;
+                    if (PDFJSIManager && typeof PDFJSIManager.registerPathForSearch === 'function') {
+                        if (__DEV__) {
+                            console.log('📌 [Pdf] Registering path for search:', this.props.pdfId, 'pathLength:', filePath.length);
+                        }
+                        PDFJSIManager.registerPathForSearch(this.props.pdfId, filePath).then(() => {
+                            if (__DEV__) console.log('✅ [Pdf] Path registered for search:', this.props.pdfId);
+                        }).catch((err) => {
+                            if (__DEV__) console.warn('⚠️ [Pdf] registerPathForSearch failed:', err);
+                        });
+                    } else if (__DEV__) {
+                        console.warn('⚠️ [Pdf] PDFJSIManager.registerPathForSearch not available');
+                    }
+                } else if (__DEV__) {
+                    console.log('📌 [Pdf] Skip path registration: pdfId=', this.props.pdfId, 'hasPath=', !!filePath);
+                }
                 // Log path extraction for debugging
                 if (__DEV__) {
                     console.log('📁 [Pdf] loadComplete - Path extraction:', {
@@ -757,6 +779,11 @@ export {
     CompressionPreset,
     CompressionLevel
 };
+
+// ========================================
+// Programmatic search and JSI API (fix #24)
+// ========================================
+export { searchTextDirect, PDFJSI };
 
 // ========================================
 // TIER 3: Pre-built UI Components

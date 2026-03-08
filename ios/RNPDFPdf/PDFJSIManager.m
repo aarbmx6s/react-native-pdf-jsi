@@ -8,9 +8,11 @@
 
 #import "PDFJSIManager.h"
 #import "PDFNativeCacheManager.h"
+#import "SearchRegistry.h"
 #import <React/RCTLog.h>
 #import <React/RCTUtils.h>
 #import <React/RCTBridge.h>
+#import <PDFKit/PDFKit.h>
 #import <dispatch/dispatch.h>
 
 @implementation PDFJSIManager {
@@ -248,6 +250,21 @@ RCT_EXPORT_METHOD(optimizeMemory:(NSString *)pdfId
     });
 }
 
+RCT_EXPORT_METHOD(registerPathForSearch:(NSString *)pdfId
+                  path:(NSString *)path
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    if (pdfId.length && path.length) {
+        [SearchRegistry registerPath:pdfId path:path];
+        RCTLogInfo(@"✅ [SearchRegistry] Registered path for pdfId: %@ (path length %lu)", pdfId, (unsigned long)path.length);
+        resolve(@YES);
+    } else {
+        RCTLogWarn(@"⚠️ [SearchRegistry] registerPathForSearch skipped: pdfId length=%lu path length=%lu", (unsigned long)pdfId.length, (unsigned long)path.length);
+        resolve(@NO);
+    }
+}
+
 RCT_EXPORT_METHOD(searchTextDirect:(NSString *)pdfId
                   searchTerm:(NSString *)searchTerm
                   startPage:(NSInteger)startPage
@@ -259,14 +276,82 @@ RCT_EXPORT_METHOD(searchTextDirect:(NSString *)pdfId
         reject(@"JSI_NOT_INITIALIZED", @"JSI is not initialized", nil);
         return;
     }
+    if (!searchTerm || searchTerm.length == 0) {
+        resolve(@[]);
+        return;
+    }
     
     dispatch_async(_backgroundQueue, ^{
         @try {
             RCTLogInfo(@"🔍 Searching text via JSI: '%@' in pages %ld-%ld", searchTerm, (long)startPage, (long)endPage);
             
-            // Simulate text search - return empty array for now
-            NSArray *results = @[];
-            resolve(results);
+            NSString *path = [SearchRegistry pathForPdfId:pdfId];
+            if (!path || path.length == 0) {
+                RCTLogWarn(@"❌ [Search] No path registered for pdfId: %@ - ensure onLoadComplete ran and pdfId is set on Pdf", pdfId);
+                resolve(@[]);
+                return;
+            }
+            if ([path hasPrefix:@"http://"] || [path hasPrefix:@"https://"]) {
+                RCTLogWarn(@"❌ [Search] Path for pdfId %@ is a URI (not a local file path) - cannot open for search", pdfId);
+                resolve(@[]);
+                return;
+            }
+            RCTLogInfo(@"📂 [Search] Path for pdfId '%@': length %lu", pdfId, (unsigned long)path.length);
+            if ([path hasPrefix:@"file://"]) {
+                path = [path substringFromIndex:7];
+            }
+            BOOL readable = [[NSFileManager defaultManager] isReadableFileAtPath:path];
+            if (!readable) {
+                RCTLogWarn(@"❌ [Search] File not readable at path (length %lu)", (unsigned long)path.length);
+                resolve(@[]);
+                return;
+            }
+            NSURL *fileURL = [NSURL fileURLWithPath:path];
+            PDFDocument *doc = [[PDFDocument alloc] initWithURL:fileURL];
+            if (!doc || doc.pageCount == 0) {
+                RCTLogWarn(@"❌ [Search] PDFDocument init failed or empty: doc=%p pageCount=%lu", (__bridge void *)doc, (unsigned long)doc.pageCount);
+                resolve(@[]);
+                return;
+            }
+            
+            NSInteger from = MAX(1, startPage);
+            NSInteger to = MIN((NSInteger)doc.pageCount, endPage);
+            NSMutableArray *out = [NSMutableArray array];
+            
+            // findString:withOptions: returns selections; each can span multiple pages
+            NSArray<PDFSelection *> *selections = [doc findString:searchTerm withOptions:NSCaseInsensitiveSearch];
+            RCTLogInfo(@"📄 [Search] findString returned %lu selection(s) for '%@'", (unsigned long)selections.count, searchTerm);
+            for (PDFSelection *sel in selections) {
+                for (PDFPage *page in sel.pages) {
+                    NSInteger pageIndex1Based = [doc indexForPage:page] + 1;
+                    if (pageIndex1Based < from || pageIndex1Based > to) continue;
+                    
+                    CGRect bounds = [sel boundsForPage:page];
+                    // PDF page coords: origin bottom-left. Serialize as "left,top,right,bottom" (y-up: top > bottom)
+                    CGFloat left = bounds.origin.x;
+                    CGFloat bottom = bounds.origin.y;
+                    CGFloat right = bounds.origin.x + bounds.size.width;
+                    CGFloat top = bounds.origin.y + bounds.size.height;
+                    NSString *rectStr = [NSString stringWithFormat:@"%g,%g,%g,%g", left, top, right, bottom];
+                    
+                    [out addObject:@{
+                        @"page": @(pageIndex1Based),
+                        @"text": sel.string ?: @"",
+                        @"rect": rectStr
+                    }];
+                }
+            }
+            
+            // Register page sizes in points for highlight scaling (use first page of range if we have selections)
+            for (NSInteger idx = from; idx <= to; idx++) {
+                PDFPage *page = [doc pageAtIndex:(NSUInteger)(idx - 1)];
+                if (page) {
+                    CGRect box = [page boundsForBox:kPDFDisplayBoxMediaBox];
+                    [SearchRegistry registerPageSizePointsForPdfId:pdfId pageIndex0Based:(idx - 1) widthPt:box.size.width heightPt:box.size.height];
+                }
+            }
+            
+            resolve([out copy]);
             
         } @catch (NSException *exception) {
             RCTLogError(@"❌ Error searching text via JSI: %@", exception.reason);
@@ -580,7 +665,7 @@ RCT_EXPORT_METHOD(testNativeCache:(RCTPromiseResolveBlock)resolve
 
                // iOS doesn't have the same 16KB page size requirements as Android
                // but we still check for compatibility
-               BOOL is16KBSupported = [self checkiOS16KBSupport];
+               (void)[self checkiOS16KBSupport];
 
                NSDictionary *result = @{
                    @"supported": @YES, // iOS is generally compatible

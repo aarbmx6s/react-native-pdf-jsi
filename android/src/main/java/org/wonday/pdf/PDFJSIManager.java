@@ -18,14 +18,26 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Arguments;
 
 // import com.facebook.react.turbomodule.core.CallInvokerHolder; // Not available in this RN version
 import com.facebook.soloader.SoLoader;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import android.graphics.RectF;
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
+
+import io.legere.pdfiumandroid.PdfiumCore;
+import io.legere.pdfiumandroid.PdfDocument;
+import io.legere.pdfiumandroid.PdfPage;
+import io.legere.pdfiumandroid.PdfTextPage;
 
 public class PDFJSIManager extends ReactContextBaseJavaModule {
     private static final String MODULE_NAME = "PDFJSIManager";
@@ -220,9 +232,24 @@ public class PDFJSIManager extends ReactContextBaseJavaModule {
             }
         });
     }
+
+    /**
+     * Register a path for search by pdfId. Called from JS when loadComplete fires so search works
+     * even if the native view has not received pdfId yet. On Android the view also registers; this is for parity with iOS.
+     */
+    @ReactMethod
+    public void registerPathForSearch(String pdfId, String path, Promise promise) {
+        if (pdfId != null && !pdfId.isEmpty() && path != null && !path.isEmpty()) {
+            SearchRegistry.registerPath(pdfId, path);
+            promise.resolve(true);
+        } else {
+            promise.resolve(false);
+        }
+    }
     
     /**
-     * Search text directly via JSI
+     * Search text directly via JSI.
+     * Uses SearchRegistry to get path for pdfId, then io.legere PdfiumCore to extract text and find matches.
      */
     @ReactMethod
     public void searchTextDirect(String pdfId, String searchTerm, int startPage, int endPage, Promise promise) {
@@ -230,17 +257,125 @@ public class PDFJSIManager extends ReactContextBaseJavaModule {
             promise.reject("JSI_NOT_INITIALIZED", "JSI is not initialized");
             return;
         }
-        
+        if (searchTerm == null || searchTerm.isEmpty()) {
+            promise.resolve(Arguments.createArray());
+            return;
+        }
         backgroundExecutor.execute(() -> {
             try {
                 Log.d(TAG, "Searching text via JSI: '" + searchTerm + "' in pages " + startPage + "-" + endPage);
-                ReadableArray results = nativeSearchTextDirect(pdfId, searchTerm, startPage, endPage);
+                String path = SearchRegistry.getPath(pdfId);
+                if (path == null || path.isEmpty()) {
+                    Log.w(TAG, "No path registered for pdfId: " + pdfId + " - pass pdfId to Pdf view to enable search");
+                    promise.resolve(Arguments.createArray());
+                    return;
+                }
+                WritableArray results = searchInPdf(pdfId, path, searchTerm, startPage, endPage);
                 promise.resolve(results);
             } catch (Exception e) {
                 Log.e(TAG, "Error searching text via JSI", e);
                 promise.reject("SEARCH_ERROR", e.getMessage());
             }
         });
+    }
+
+    private WritableArray searchInPdf(String pdfId, String path, String searchTerm, int startPage, int endPage) {
+        WritableArray out = Arguments.createArray();
+        ParcelFileDescriptor pfd = null;
+        PdfDocument doc = null;
+        try {
+            if (path.startsWith("content://")) {
+                pfd = getReactApplicationContext().getContentResolver()
+                    .openFileDescriptor(Uri.parse(path), "r");
+            } else {
+                File file = new File(path);
+                if (!file.exists() || !file.canRead()) {
+                    return out;
+                }
+                pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+            }
+            if (pfd == null) return out;
+            PdfiumCore core = new PdfiumCore();
+            doc = core.newDocument(pfd);
+            int pageCount = doc.getPageCount();
+            int from = Math.max(1, startPage);
+            int to = Math.min(endPage, pageCount);
+            String termLower = searchTerm.toLowerCase();
+            for (int pageIndex = from; pageIndex <= to; pageIndex++) {
+                int zeroBased = pageIndex - 1;
+                PdfPage page = doc.openPage(zeroBased);
+                if (page == null) continue;
+                try {
+                    // Store page size in PDF points for highlight scaling in PdfView
+                    try {
+                        int wPt = page.getPageWidthPoint();
+                        int hPt = page.getPageHeightPoint();
+                        if (wPt > 0 && hPt > 0) {
+                            SearchRegistry.registerPageSizePoints(pdfId, zeroBased, (float) wPt, (float) hPt);
+                        }
+                    } catch (Exception ignored) {}
+                    PdfTextPage textPage = page.openTextPage();
+                    if (textPage == null) continue;
+                    try {
+                        int chars = textPage.textPageCountChars();
+                        if (chars <= 0) continue;
+                        String text = textPage.textPageGetText(0, chars);
+                        if (text == null) continue;
+                        String textLower = text.toLowerCase();
+                        int idx = 0;
+                        while ((idx = textLower.indexOf(termLower, idx)) >= 0) {
+                            int end = Math.min(idx + searchTerm.length(), text.length());
+                            int len = end - idx;
+                            String snippet = text.substring(idx, end);
+                            WritableMap item = Arguments.createMap();
+                            item.putInt("page", pageIndex);
+                            item.putString("text", snippet);
+                            String rectStr = "{}";
+                            try {
+                                int rectCount = textPage.textPageCountRects(idx, len);
+                                if (rectCount > 0) {
+                                    RectF first = textPage.textPageGetRect(0);
+                                    if (first != null) {
+                                        rectStr = first.left + "," + first.top + "," + first.right + "," + first.bottom;
+                                    }
+                                }
+                                if ("{}".equals(rectStr)) {
+                                    RectF charBox = textPage.textPageGetCharBox(idx);
+                                    if (charBox != null) {
+                                        rectStr = charBox.left + "," + charBox.top + "," + charBox.right + "," + charBox.bottom;
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.d(TAG, "Rect lookup for match at " + idx + ": " + e.getMessage());
+                            }
+                            item.putString("rect", rectStr);
+                            out.pushMap(item);
+                            idx = end;
+                        }
+                    } finally {
+                        textPage.close();
+                    }
+                } finally {
+                    page.close();
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Search IO error", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Search error", e);
+        } finally {
+            if (doc != null) {
+                try {
+                    doc.close();
+                } catch (Exception ignored) {}
+            }
+            if (pfd != null) {
+                try {
+                    pfd.close();
+                } catch (IOException ignored) {}
+            }
+        }
+        return out;
     }
     
     /**
