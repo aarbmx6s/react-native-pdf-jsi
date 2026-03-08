@@ -80,7 +80,9 @@
     },
     "scripts": {
         "build:plugin": "tsc -p plugin/tsconfig.json",
-        "prepublishOnly": "npm run build:plugin"
+        "prepublishOnly": "npm run build:plugin",
+        "clean:for-publish": "node -e \"const fs=require('fs'),path=require('path');['android/.cxx','android/.gradle','android/build'].forEach(p=>{try{fs.rmSync(path.join(__dirname,p),{recursive:true});console.log('Removed',p);}catch(e){}})\"",
+        "prepack": "npm run clean:for-publish"
     },
     "peerDependencies": {
         "@react-native-async-storage/async-storage": ">=1.17.0",
