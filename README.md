@@ -41,7 +41,7 @@ High-performance React Native PDF viewer with JSI (JavaScript Interface) acceler
 - **Export Operations**: Export pages to PNG/JPEG with quality control
 - **PDF Operations**: Split, merge, extract, rotate, and delete pages
 - **PDF Compression**: Reduce file sizes with 5 smart presets (EMAIL, WEB, MOBILE, PRINT, ARCHIVE)
-- **Text Extraction**: Extract and search text with statistics and context
+- **Text Extraction & Search**: Extract and search text with statistics and context; **programmatic search** via `searchTextDirect(pdfId, term, startPage, endPage)` with bounding rects, and **highlight rendering** via `pdfId` + `highlightRects` props (Android & iOS)
 - **File Management** (Android): Download to public storage, open folders with MediaStore API
 
 ### Compliance & Compatibility
@@ -261,6 +261,8 @@ The documentation includes:
 | `enableAnnotationRendering` | boolean | true | Enable annotation rendering |
 | `enableDoubleTapZoom` | boolean | true | Enable double tap to zoom |
 | `singlePage` | boolean | false | Show only first page (thumbnail mode) |
+| `pdfId` | string | undefined | Stable ID for this PDF (e.g. `"main-pdf"`); required for `searchTextDirect()` so native code can resolve the document path |
+| `highlightRects` | array | undefined | Array of `{ page: number, rect: string }` (rect: `"left,top,right,bottom"` in PDF points) to draw yellow highlights; use with `searchTextDirect()` results |
 | `trustAllCerts` | boolean | true | Allow self-signed certificates |
 | `onLoadProgress` | function(percent) | null | Loading progress callback (0-1) |
 | `onLoadComplete` | function(pages, path, size, tableContents) | null | Called when PDF loads |
@@ -303,6 +305,30 @@ const pdfRef = useRef(null);
 // Navigate to page 42
 pdfRef.current?.setPage(42);
 ```
+
+#### searchTextDirect(pdfId, searchTerm, startPage, endPage)
+
+Programmatic PDF text search. Returns a promise that resolves to an array of `{ page, text, rect }` (rect is `"left,top,right,bottom"` in PDF coordinates). Use with `pdfId` and `highlightRects` to show highlights.
+
+```jsx
+import Pdf, { searchTextDirect } from 'react-native-pdf-jsi';
+
+const PDF_ID = 'main-pdf';
+const [highlights, setHighlights] = useState([]);
+
+<Pdf
+  pdfId={PDF_ID}
+  source={source}
+  highlightRects={highlights.filter(r => r.rect).map(r => ({ page: r.page, rect: r.rect }))}
+  onLoadComplete={(pages, path) => { /* path is registered for search */ }}
+/>
+
+// After PDF has loaded, e.g. on button press:
+const results = await searchTextDirect(PDF_ID, 'Lorem', 1, 999);
+setHighlights(results);
+```
+
+On iOS, the path is registered when the document loads (local file only); you can also call `NativeModules.PDFJSIManager.registerPathForSearch(pdfId, path)` after `onLoadComplete` if needed. Highlights stay aligned when zooming and scrolling on both Android and iOS.
 
 ## ProGuard / R8 Configuration (Android Release Builds)
 

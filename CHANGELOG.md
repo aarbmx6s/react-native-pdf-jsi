@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2025-03-08
+
+### Added
+- **Programmatic search and highlight (Android & iOS)** – Fixes [#24](https://github.com/126punith/react-native-pdf-jsi/issues/24)
+  - **`searchTextDirect(pdfId, searchTerm, startPage, endPage)`** – Exported to JS; runs native PDF text search and returns `{ page, text, rect }[]` with bounding boxes in PDF coordinates.
+  - **`pdfId` prop** – Optional stable ID for the current PDF (e.g. `"main-pdf"`). Required for `searchTextDirect` so the native side can resolve the document path.
+  - **`highlightRects` prop** – Array of `{ page, rect }` (rect: `"left,top,right,bottom"` in PDF points). When set, the viewer draws semi-transparent yellow highlights over those regions. Supports zoom and scroll on both platforms.
+  - **Path registration** – Path for search is registered when the PDF loads (from `onLoadComplete` and native `onDocumentChanged`). JS can also call `PDFJSIManager.registerPathForSearch(pdfId, path)` for explicit registration. Only local file paths are registered; URI paths are ignored to avoid search on non-downloaded sources.
+- **Android**: `SearchRegistry` for `pdfId`→path and page dimensions; PDFium-based search with rect fallback; highlight drawing in `PdfView` with correct PDF-to-view scaling and Y-axis conversion.
+- **iOS**: `SearchRegistry`, PDFKit `findString` search, `HighlightOverlayView` for drawing highlights; overlay redraw on zoom and scroll so highlights stay aligned with text.
+
+### Fixed
+- **iOS search returning 0 results**: Search now uses the local file path (from load/cache) instead of the original URI. Path is registered when the document loads and via JS after `onLoadComplete`. URI guard in native search prevents using `http(s):` paths.
+- **iOS highlights misaligned after zoom/scroll**: Highlight overlay is redrawn in `scrollViewDidZoom`, `scrollViewDidEndZooming`, and `scrollViewDidScroll` so `convertRect:fromPage:` is re-evaluated and highlights stay aligned with the zoomed/scrolled content.
+- **iOS PDFJSIManager build**: Replaced `(void *)doc` with `(__bridge void *)doc` for ARC; removed unused variables to clear compiler warnings.
+- **.gitignore**: Added `.npmrc` to avoid committing auth tokens.
+
+### Technical details
+- **Android**: `SearchRegistry.java`, `PDFJSIManager.searchInPdf` with page-size registration and rect fallback, `PdfView`/`PdfManager` for `pdfId`/`highlightRects`, `registerPathForSearch` promise API.
+- **iOS**: `SearchRegistry.h/m`, `PDFJSIManager.m` PDFKit search and `registerPathForSearch`, `RNPDFPdfView.mm` `HighlightOverlayView`, path registration in `setPdfId`/`updateProps`/`onDocumentChanged`, overlay redraw in scroll/zoom delegates.
+- **JS**: `index.js` exports `searchTextDirect`, passes `pdfId`/`highlightRects`, calls `registerPathForSearch` in `onLoadComplete` handler; `src/PDFJSI.js` and Fabric spec updated for new props.
+
 ## [4.3.0] - 2025-02-02
 
 ### Added
