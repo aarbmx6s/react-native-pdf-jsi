@@ -120,7 +120,7 @@ This package works with **Expo development builds** (not Expo Go, as it requires
 **1. Install the package and peer dependencies:**
 
 ```bash
-npx expo install react-native-pdf-jsi react-native-blob-util @react-native-async-storage/async-storage
+npx expo install react-native-pdf-jsi react-native-blob-util react-native-mmkv
 ```
 
 **2. Add the config plugin to your `app.json` or `app.config.js`:**
@@ -494,7 +494,7 @@ Added Expo config plugin for seamless integration with Expo development builds. 
 
 **Installation:**
 ```bash
-npx expo install react-native-pdf-jsi react-native-blob-util @react-native-async-storage/async-storage
+npx expo install react-native-pdf-jsi react-native-blob-util react-native-mmkv
 ```
 
 **Configuration (app.json):**

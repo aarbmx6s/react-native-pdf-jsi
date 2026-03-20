@@ -10,7 +10,7 @@
  * @version 1.0.0
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/MMKVAsyncStorage';
 
 const STORAGE_KEY = '@react-native-pdf-jsi/bookmarks';
 const PROGRESS_KEY = '@react-native-pdf-jsi/progress';

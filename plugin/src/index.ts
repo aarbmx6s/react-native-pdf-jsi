@@ -19,7 +19,7 @@ const withPdfJsi: ConfigPlugin = (config) => {
   console.log(
     '[react-native-pdf-jsi] Remember to install peer dependencies:\n' +
     '  - react-native-blob-util\n' +
-    '  - @react-native-async-storage/async-storage'
+    '  - react-native-mmkv'
   );
 
   config = withPdfJsiAndroid(config);
