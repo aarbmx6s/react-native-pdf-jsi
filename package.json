@@ -75,6 +75,7 @@
         "@babel/core": "^7.20.2",
         "@babel/runtime": "^7.20.1",
         "@expo/config-plugins": "^9.0.0",
+        "@types/node": "^25.5.0",
         "prop-types": "^15.7.2",
         "typescript": "^5.0.0"
     },
