@@ -15,13 +15,6 @@ const pkg = require('../../package.json');
  * Note: This package requires development builds and won't work with Expo Go.
  */
 const withPdfJsi: ConfigPlugin = (config) => {
-  // Warn about peer dependencies
-  console.log(
-    '[react-native-pdf-jsi] Remember to install peer dependencies:\n' +
-    '  - react-native-blob-util\n' +
-    '  - react-native-mmkv'
-  );
-
   config = withPdfJsiAndroid(config);
   config = withPdfJsiIos(config);
   
